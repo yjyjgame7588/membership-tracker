@@ -2,26 +2,26 @@ import { useState, useEffect, useCallback } from "react";
 
 // ─── 设计令牌 ──────────────────────────────────────────────────────
 const C = {
-  bg: "#F5F7FA",
+  bg: "linear-gradient(180deg, #FFF7FB 0%, #F3FBFF 48%, #FFFBEA 100%)",
   card: "#FFFFFF",
-  primary: "#1B6CF2",
-  primaryLight: "#E8F0FE",
-  primaryDark: "#1456C8",
-  accent: "#FF5A5A",
-  accentLight: "#FFF0F0",
-  success: "#10B97B",
-  successLight: "#E6FAF3",
-  warn: "#F59E0B",
-  warnLight: "#FFFBEB",
-  purple: "#8B5CF6",
-  purpleLight: "#F3EFFE",
-  gray: "#6B7A99",
-  grayLight: "#F0F2F7",
-  border: "#E4E9F2",
-  text: "#111827",
-  textSub: "#6B7A99",
-  shadow: "0 2px 12px rgba(0,0,0,0.07)",
-  shadowMd: "0 4px 24px rgba(0,0,0,0.11)",
+  primary: "#5BA7FF",
+  primaryLight: "#EAF5FF",
+  primaryDark: "#8B7CF6",
+  accent: "#FF7A9C",
+  accentLight: "#FFF0F6",
+  success: "#31CFA4",
+  successLight: "#E8FBF4",
+  warn: "#FFB84D",
+  warnLight: "#FFF6DA",
+  purple: "#A78BFA",
+  purpleLight: "#F4EEFF",
+  gray: "#7A8499",
+  grayLight: "#F7F3FF",
+  border: "#F0DDEB",
+  text: "#263247",
+  textSub: "#7A8499",
+  shadow: "0 8px 24px rgba(103, 87, 160, 0.10)",
+  shadowMd: "0 14px 36px rgba(103, 87, 160, 0.16)",
 };
 
 const STATUS = {
@@ -33,7 +33,6 @@ const STATUS = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) => { if (!d) return ""; const [, m, day] = d.split("-"); return `${m}/${day}`; };
-const pct = (a, b) => (b === 0 ? "0%" : Math.round((a / b) * 100) + "%");
 
 // ─── 默认数据 ──────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -62,6 +61,29 @@ function Badge({ status }) {
   );
 }
 
+function CuteLogo() {
+  return (
+    <svg width="38" height="38" viewBox="0 0 38 38" aria-hidden="true">
+      <defs>
+        <linearGradient id="logoBg" x1="4" y1="2" x2="34" y2="36">
+          <stop stopColor="#FFF6A8" />
+          <stop offset="0.55" stopColor="#FFD2E4" />
+          <stop offset="1" stopColor="#BDEBFF" />
+        </linearGradient>
+      </defs>
+      <rect x="1.5" y="1.5" width="35" height="35" rx="12" fill="url(#logoBg)" stroke="rgba(255,255,255,.8)" strokeWidth="2" />
+      <circle cx="13" cy="14" r="4.5" fill="#FFFFFF" />
+      <circle cx="25" cy="14" r="4.5" fill="#FFFFFF" />
+      <circle cx="19" cy="19" r="10" fill="#FFFFFF" />
+      <circle cx="15.5" cy="18" r="1.4" fill="#263247" />
+      <circle cx="22.5" cy="18" r="1.4" fill="#263247" />
+      <path d="M16 23.5c2.1 1.8 4.3 1.8 6.4 0" fill="none" stroke="#FF7A9C" strokeWidth="1.9" strokeLinecap="round" />
+      <path d="M26.5 22.5c3.3 1.4 4.8 4.2 3.8 6.4-.9 2-3.6 2.3-5.2.8-1.6-1.6-.8-4.6 1.4-4.8" fill="none" stroke="#5BA7FF" strokeWidth="2" strokeLinecap="round" />
+      <circle cx="30" cy="29.5" r="2.3" fill="#31CFA4" stroke="#FFFFFF" strokeWidth="1.3" />
+    </svg>
+  );
+}
+
 function Toast({ toast }) {
   if (!toast) return null;
   const bg = toast.type === "success" ? C.success : toast.type === "error" ? C.accent : C.primary;
@@ -76,7 +98,7 @@ function Input({ label, ...props }) {
   return (
     <div style={{ marginBottom: 14 }}>
       {label && <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>{label}</label>}
-      <input {...props} style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 15, outline: "none", boxSizing: "border-box", background: "#fff", color: C.text, ...(props.style || {}) }} />
+      <input {...props} style={{ width: "100%", padding: "12px 15px", borderRadius: 15, border: `1.5px solid ${C.border}`, fontSize: 15, outline: "none", boxSizing: "border-box", background: "#fff", color: C.text, boxShadow: "inset 0 1px 0 rgba(255,255,255,.75)", ...(props.style || {}) }} />
     </div>
   );
 }
@@ -84,9 +106,9 @@ function Input({ label, ...props }) {
 function Btn({ children, onClick, color = C.primary, outline, style, small }) {
   return (
     <button onClick={onClick} style={{
-      padding: small ? "6px 14px" : "11px 20px", borderRadius: 10, border: outline ? `1.5px solid ${color}` : "none",
+      padding: small ? "6px 14px" : "11px 20px", borderRadius: 14, border: outline ? `1.5px solid ${color}` : "none",
       background: outline ? "#fff" : color, color: outline ? color : "#fff",
-      fontSize: small ? 13 : 15, fontWeight: 600, cursor: "pointer", ...(style || {})
+      fontSize: small ? 13 : 15, fontWeight: 700, cursor: "pointer", boxShadow: outline ? "none" : "0 8px 18px rgba(91,167,255,.22)", ...(style || {})
     }}>{children}</button>
   );
 }
@@ -95,10 +117,8 @@ function Btn({ children, onClick, color = C.primary, outline, style, small }) {
 export default function App() {
   const [customers, setCustomers] = useState([]);
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
-  const [tab, setTab] = useState("home");
+  const [tab, setTab] = useState("stats");
   const [toast, setToast] = useState(null);
-  const [ready, setReady] = useState(false);
-  const [dailyModal, setDailyModal] = useState(false);
   const [dupModal, setDupModal] = useState(null);
   const [detailId, setDetailId] = useState(null);
   const [filterTeam, setFilterTeam] = useState("全部");
@@ -119,14 +139,7 @@ export default function App() {
       if (c) setCustomers(JSON.parse(c)); else setCustomers(SAMPLE);
       if (s) setSettings(JSON.parse(s));
     } catch { setCustomers(SAMPLE); }
-    setReady(true);
   }, []);
-
-  useEffect(() => {
-    if (!ready) return;
-    const f = customers.filter(c => c.status === "following");
-    if (f.length > 0) setDailyModal(true);
-  }, [ready, customers]);
 
   const saveC = useCallback((data) => { try { localStorage.setItem("jb_customers", JSON.stringify(data)); } catch {} }, []);
   const saveS = useCallback((data) => { try { localStorage.setItem("jb_settings", JSON.stringify(data)); } catch {} }, []);
@@ -156,19 +169,27 @@ export default function App() {
   };
 
   const handleAdd = (force = false) => {
-    if (!form.name.trim()) { showToast("error", "请填写顾客姓名"); return; }
-    if (!form.phone.trim()) { showToast("error", "请填写手机号"); return; }
-    if (!/^1\d{10}$/.test(form.phone)) { showToast("error", "手机号格式不正确"); return; }
+    const cleanName = form.name.trim();
+    const cleanPhone = form.phone.trim();
+    if (!cleanName) { showToast("error", "请填写顾客姓名"); return; }
+    if (!cleanPhone) { showToast("error", "请填写手机号"); return; }
+    if (!/^1\d{10}$/.test(cleanPhone)) { showToast("error", "手机号格式不正确"); return; }
     if (form.status === "failed" && !form.failReason.trim()) { showToast("error", "请填写营销失败原因"); return; }
 
-    const dup = customers.find(c => c.phone === form.phone);
-    if (dup && !force) {
-      setDupModal(dup);
-      setPendingForm({ ...form });
+    const duplicates = customers.filter(c => c.phone === cleanPhone || c.name.trim() === cleanName);
+    if (duplicates.length > 0 && !force) {
+      setDupModal({
+        name: cleanName,
+        phone: cleanPhone,
+        matches: duplicates,
+        samePhone: duplicates.some(c => c.phone === cleanPhone),
+        sameName: duplicates.some(c => c.name.trim() === cleanName),
+      });
+      setPendingForm({ ...form, name: cleanName, phone: cleanPhone });
       return;
     }
 
-    const newC = { id: Date.now(), ...form, name: form.name.trim() };
+    const newC = { id: Date.now(), ...form, name: cleanName, phone: cleanPhone };
     const updated = [newC, ...customers];
     setCustomers(updated); saveC(updated);
     showToast("success", `已添加：${newC.name}`);
@@ -178,7 +199,7 @@ export default function App() {
 
   const confirmDup = () => {
     if (!pendingForm) return;
-    const newC = { id: Date.now(), ...pendingForm, name: pendingForm.name.trim() };
+    const newC = { id: Date.now(), ...pendingForm, name: pendingForm.name.trim(), phone: pendingForm.phone.trim() };
     const updated = [newC, ...customers];
     setCustomers(updated); saveC(updated);
     showToast("success", `已强制添加：${newC.name}`);
@@ -206,17 +227,16 @@ export default function App() {
     const allT = todayC.filter(c => c.teamId === t.id);
     const won = all.filter(c => c.status === "success").length;
     const wonT = allT.filter(c => c.status === "success").length;
-    const contacted = all.filter(c => c.status !== "pending").length;
-    return { ...t, total: all.length, won, wonT, todayTotal: allT.length, rate: pct(won, contacted) };
+    return { ...t, total: all.length, won, wonT, todayTotal: allT.length };
   }).sort((a, b) => b.won - a.won);
 
   const staffStats = allStaff.map(s => {
     const all = customers.filter(c => c.staff === s.name);
     const won = all.filter(c => c.status === "success").length;
     const wonT = todayC.filter(c => c.staff === s.name && c.status === "success").length;
-    const contacted = all.filter(c => c.status !== "pending").length;
-    return { ...s, total: all.length, won, wonT, rate: pct(won, contacted) };
-  }).sort((a, b) => b.won - a.won);
+    const todayTotal = todayC.filter(c => c.staff === s.name).length;
+    return { ...s, total: all.length, won, wonT, todayTotal };
+  }).sort((a, b) => b.won - a.won || b.total - a.total || a.name.localeCompare(b.name, "zh-CN"));
 
   // ── 筛选 ──
   const displayList = customers.filter(c => {
@@ -240,25 +260,25 @@ export default function App() {
     <div style={{ fontFamily: "'PingFang SC','Microsoft YaHei',sans-serif", background: C.bg, minHeight: "100vh", color: C.text, paddingBottom: 80 }}>
 
       {/* ── 顶栏 ── */}
-      <div style={{ background: `linear-gradient(135deg, ${C.primary} 0%, ${C.primaryDark} 100%)`, padding: "14px 16px 0", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 2px 12px rgba(27,108,242,0.3)" }}>
+      <div style={{ background: `linear-gradient(135deg, #FFB7D2 0%, ${C.primary} 54%, #9BE7C9 100%)`, padding: "14px 16px 0", position: "sticky", top: 0, zIndex: 100, boxShadow: "0 8px 26px rgba(91,167,255,0.22)", borderRadius: "0 0 24px 24px" }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 12 }}>
-          <div style={{ width: 36, height: 36, borderRadius: 10, background: "rgba(255,255,255,0.2)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18 }}>🏥</div>
+          <div style={{ width: 46, height: 46, borderRadius: 16, background: "rgba(255,255,255,0.55)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.65), 0 8px 18px rgba(75,95,140,.12)" }}><CuteLogo /></div>
           <div style={{ flex: 1 }}>
-            <div style={{ color: "#fff", fontWeight: 700, fontSize: 16, letterSpacing: 0.5 }}>京贝营销管理系统</div>
-            <div style={{ color: "rgba(255,255,255,0.65)", fontSize: 12 }}>{today()} · 今日录入 {todayC.length} 条</div>
+            <div style={{ color: "#fff", fontWeight: 900, fontSize: 17, letterSpacing: 0.3, textShadow: "0 2px 8px rgba(79,89,130,.18)" }}>京贝儿童门诊会员营销系统</div>
+            <div style={{ color: "rgba(255,255,255,0.86)", fontSize: 12, fontWeight: 600 }}>{today()} · 今日录入 {todayC.length} 条</div>
           </div>
           {followingList.length > 0 && (
-            <div onClick={() => setTab("follow")} style={{ background: C.accent, color: "#fff", borderRadius: 20, padding: "5px 12px", fontSize: 12, fontWeight: 700, cursor: "pointer", boxShadow: "0 2px 8px rgba(255,90,90,0.4)" }}>
+            <div onClick={() => setTab("follow")} style={{ background: "#fff", color: C.accent, borderRadius: 20, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 18px rgba(255,122,156,0.28)" }}>
               ⏰ {followingList.length} 跟进
             </div>
           )}
         </div>
         <div style={{ display: "flex" }}>
-          {[["home", "客户"], ["follow", "跟进"], ["stats", "统计"], ["settings", "设置"]].map(([k, label]) => (
+          {[["stats", "统计"], ["home", "客户"], ["follow", "跟进"], ["settings", "设置"]].map(([k, label]) => (
             <div key={k} onClick={() => { setTab(k); setAddOpen(false); }} style={{
               flex: 1, textAlign: "center", padding: "9px 0 8px", fontSize: 13,
               color: tab === k ? "#fff" : "rgba(255,255,255,0.55)",
-              borderBottom: tab === k ? "3px solid #fff" : "3px solid transparent",
+              borderBottom: tab === k ? "4px solid #fff" : "4px solid transparent",
               cursor: "pointer", fontWeight: tab === k ? 700 : 400, transition: "all .15s"
             }}>{label}</div>
           ))}
@@ -273,8 +293,8 @@ export default function App() {
             {/* 搜索+添加 */}
             <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
               <input value={searchQ} onChange={e => setSearchQ(e.target.value)} placeholder="🔍 搜索姓名或手机号"
-                style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", background: "#fff" }} />
-              <Btn onClick={openAdd} style={{ borderRadius: 10, padding: "10px 16px", whiteSpace: "nowrap" }}>＋ 添加</Btn>
+                style={{ flex: 1, padding: "11px 15px", borderRadius: 16, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", background: "#fff", boxShadow: C.shadow }} />
+              <Btn onClick={openAdd} style={{ borderRadius: 16, padding: "10px 16px", whiteSpace: "nowrap" }}>＋ 添加</Btn>
             </div>
 
             {/* 战队筛选 */}
@@ -349,10 +369,10 @@ export default function App() {
       {/* ══ 底部添加按钮（仅首页） ══ */}
       {tab === "home" && !addOpen && (
         <div style={{ position: "fixed", bottom: 20, right: 20, zIndex: 200 }}>
-          <div onClick={openAdd} style={{
-            width: 54, height: 54, borderRadius: 27, background: C.primary, color: "#fff",
+            <div onClick={openAdd} style={{
+            width: 58, height: 58, borderRadius: 24, background: `linear-gradient(135deg, ${C.accent} 0%, ${C.primary} 100%)`, color: "#fff",
             display: "flex", alignItems: "center", justifyContent: "center", fontSize: 28, fontWeight: 300,
-            cursor: "pointer", boxShadow: "0 4px 20px rgba(27,108,242,0.45)"
+            cursor: "pointer", boxShadow: "0 12px 26px rgba(255,122,156,0.34)"
           }}>＋</div>
         </div>
       )}
@@ -370,39 +390,30 @@ export default function App() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
           <div style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 360, boxShadow: C.shadowMd }}>
             <div style={{ fontSize: 38, textAlign: "center", marginBottom: 8 }}>⚠️</div>
-            <div style={{ fontWeight: 700, fontSize: 17, textAlign: "center", color: C.accent, marginBottom: 12 }}>检测到重复手机号</div>
+            <div style={{ fontWeight: 700, fontSize: 17, textAlign: "center", color: C.accent, marginBottom: 6 }}>检测到疑似重复顾客</div>
+            <div style={{ color: C.textSub, fontSize: 13, textAlign: "center", marginBottom: 12 }}>
+              {dupModal.samePhone && dupModal.sameName ? "姓名和手机号已有相同记录" : dupModal.samePhone ? "手机号已有相同记录" : "姓名已有相同记录"}
+            </div>
             <div style={{ background: C.accentLight, borderRadius: 12, padding: 14, marginBottom: 18, fontSize: 14, lineHeight: 1.8 }}>
-              <div>姓名：<b>{dupModal.name}</b></div>
-              <div>手机：<b>{dupModal.phone}</b></div>
-              <div>录入员工：<b>{dupModal.staff}</b>（{teamName(dupModal.teamId)}）</div>
-              <div>录入日期：<b>{dupModal.date}</b></div>
-              <div>当前状态：<Badge status={dupModal.status} /></div>
+              {dupModal.matches.map((m, i) => (
+                <div key={m.id} style={{ paddingBottom: i < dupModal.matches.length - 1 ? 10 : 0, marginBottom: i < dupModal.matches.length - 1 ? 10 : 0, borderBottom: i < dupModal.matches.length - 1 ? `1px solid ${C.border}` : "none" }}>
+                  <div style={{ marginBottom: 4 }}>
+                    {m.name.trim() === dupModal.name && <span style={{ color: C.accent, fontWeight: 700, marginRight: 8 }}>姓名相同</span>}
+                    {m.phone === dupModal.phone && <span style={{ color: C.accent, fontWeight: 700 }}>手机号相同</span>}
+                  </div>
+                  <div>姓名：<b>{m.name}</b></div>
+                  <div>手机：<b>{m.phone}</b></div>
+                  <div>录入员工：<b>{m.staff}</b>（{teamName(m.teamId)}）</div>
+                  <div>录入日期：<b>{m.date}</b></div>
+                  <div>当前状态：<Badge status={m.status} /></div>
+                </div>
+              ))}
             </div>
             <div style={{ color: C.textSub, fontSize: 13, textAlign: "center", marginBottom: 20 }}>该顾客已有记录，是否仍要添加？</div>
             <div style={{ display: "flex", gap: 10 }}>
               <Btn outline color={C.border} onClick={() => { setDupModal(null); setPendingForm(null); }} style={{ flex: 1, color: C.text }}>取消</Btn>
               <Btn color={C.accent} onClick={confirmDup} style={{ flex: 1 }}>仍要添加</Btn>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* ══ 每日跟进提醒 ══ */}
-      {dailyModal && (
-        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 24, width: "100%", maxWidth: 360, boxShadow: C.shadowMd, maxHeight: "82vh", overflow: "auto" }}>
-            <div style={{ fontSize: 34, textAlign: "center", marginBottom: 6 }}>☀️</div>
-            <div style={{ fontWeight: 700, fontSize: 17, textAlign: "center", marginBottom: 4 }}>今日跟进提醒</div>
-            <div style={{ color: C.textSub, fontSize: 13, textAlign: "center", marginBottom: 16 }}>共 {followingList.length} 位顾客待跟进</div>
-            {followingList.map(c => (
-              <div key={c.id} style={{ background: C.warnLight, borderRadius: 12, padding: 13, marginBottom: 10, borderLeft: `4px solid ${C.warn}` }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{c.name} <span style={{ color: C.textSub, fontSize: 13, fontWeight: 400 }}>{c.phone}</span></div>
-                <div style={{ fontSize: 13, color: C.textSub, marginTop: 4 }}>跟进人：{c.followStaff || c.staff} · {teamName(c.teamId)}</div>
-                {c.followNote && <div style={{ fontSize: 13, color: C.text, marginTop: 4 }}>📝 {c.followNote}</div>}
-              </div>
-            ))}
-            <Btn onClick={() => { setDailyModal(false); setTab("follow"); }} style={{ width: "100%", marginTop: 6 }}>查看全部跟进</Btn>
-            <div onClick={() => setDailyModal(false)} style={{ textAlign: "center", color: C.textSub, fontSize: 14, padding: "10px 0", cursor: "pointer" }}>稍后处理</div>
           </div>
         </div>
       )}
@@ -416,7 +427,7 @@ export default function App() {
 function CustCard({ c, teamName, onClick, showNote }) {
   const s = STATUS[c.status] || STATUS.pending;
   return (
-    <div onClick={onClick} style={{ background: "#fff", borderRadius: 14, padding: "14px 16px", marginBottom: 10, boxShadow: C.shadow, borderLeft: `4px solid ${s.color}`, cursor: "pointer" }}>
+    <div onClick={onClick} style={{ background: "rgba(255,255,255,0.94)", borderRadius: 20, padding: "15px 16px", marginBottom: 12, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, borderLeft: `6px solid ${s.color}`, cursor: "pointer" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <span style={{ fontWeight: 700, fontSize: 16 }}>{c.name}</span>
@@ -445,8 +456,8 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
   const f = form;
   const set = (k, v) => setForm(x => ({ ...x, [k]: v }));
   return (
-    <div style={{ background: "#fff", borderRadius: 16, padding: 20, boxShadow: C.shadow }}>
-      <div style={{ fontWeight: 700, fontSize: 17, marginBottom: 18, color: C.primary }}>➕ 录入新顾客</div>
+    <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 20, boxShadow: C.shadow, border: `1.5px solid ${C.border}` }}>
+      <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 18, color: C.primary }}>🌈 录入新顾客</div>
 
       <Input label="顾客姓名 *" value={f.name} onChange={e => set("name", e.target.value)} placeholder="请输入顾客姓名" />
       <Input label="手机号 *" value={f.phone} onChange={e => set("phone", e.target.value)} placeholder="请输入11位手机号" type="tel" />
@@ -455,7 +466,7 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
       <div style={{ marginBottom: 14 }}>
         <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>推荐员工</label>
         <select value={f.staff} onChange={e => onStaffChange(e.target.value)}
-          style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 15, background: "#fff", outline: "none" }}>
+          style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.border}`, fontSize: 15, background: "#fff", outline: "none" }}>
           {allStaff.map(s => <option key={s.name + s.teamId} value={s.name}>{s.name}（{s.teamName}）</option>)}
         </select>
       </div>
@@ -465,7 +476,7 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
           {settings.cardTypes.map(v => (
             <div key={v} onClick={() => set("card", v)} style={{
-              padding: "9px 14px", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 500,
+              padding: "9px 14px", borderRadius: 15, cursor: "pointer", fontSize: 14, fontWeight: 600,
               background: f.card === v ? C.primary : C.primaryLight,
               color: f.card === v ? "#fff" : C.primary,
               border: `1.5px solid ${f.card === v ? C.primary : C.border}`
@@ -479,7 +490,7 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {Object.entries(STATUS).map(([k, s]) => (
             <div key={k} onClick={() => set("status", k)} style={{
-              padding: "10px 0", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 500, textAlign: "center",
+              padding: "10px 0", borderRadius: 15, cursor: "pointer", fontSize: 14, fontWeight: 600, textAlign: "center",
               background: f.status === k ? s.color : s.bg,
               color: f.status === k ? "#fff" : s.color,
               border: `1.5px solid ${f.status === k ? s.color : C.border}`
@@ -490,9 +501,9 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
 
       {f.status === "failed" && (
         <div style={{ marginBottom: 14 }}>
-          <label style={{ fontSize: 13, color: C.accent, display: "block", marginBottom: 5, fontWeight: 500 }}>失败原因 *</label>
-          <input value={f.failReason} onChange={e => set("failReason", e.target.value)} placeholder="请填写顾客拒绝原因"
-            style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.accent}`, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+            <label style={{ fontSize: 13, color: C.accent, display: "block", marginBottom: 5, fontWeight: 500 }}>失败原因 *</label>
+            <input value={f.failReason} onChange={e => set("failReason", e.target.value)} placeholder="请填写顾客拒绝原因"
+            style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.accent}`, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
         </div>
       )}
 
@@ -501,12 +512,12 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>当前跟进进展</label>
             <textarea value={f.followNote} onChange={e => set("followNote", e.target.value)} rows={2} placeholder="记录跟进状态..."
-              style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", resize: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", resize: "none", boxSizing: "border-box" }} />
           </div>
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>跟进负责人</label>
             <select value={f.followStaff} onChange={e => set("followStaff", e.target.value)}
-              style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 15, background: "#fff", outline: "none" }}>
+              style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.border}`, fontSize: 15, background: "#fff", outline: "none" }}>
               {allStaff.map(s => <option key={s.name + s.teamId} value={s.name}>{s.name}（{s.teamName}）</option>)}
             </select>
           </div>
@@ -529,7 +540,7 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
-      <div style={{ background: "#fff", borderRadius: "20px 20px 0 0", padding: "20px 20px 32px", width: "100%", maxWidth: 640, maxHeight: "90vh", overflow: "auto", boxShadow: C.shadowMd }}>
+      <div style={{ background: "#fff", borderRadius: "24px 24px 0 0", padding: "20px 20px 32px", width: "100%", maxWidth: 640, maxHeight: "90vh", overflow: "auto", boxShadow: C.shadowMd }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
           <div style={{ fontWeight: 700, fontSize: 18 }}>{c.name}</div>
           <div onClick={onClose} style={{ fontSize: 22, color: C.textSub, cursor: "pointer", lineHeight: 1 }}>×</div>
@@ -546,7 +557,7 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {Object.entries(STATUS).map(([k, s]) => (
               <div key={k} onClick={() => set("status", k)} style={{
-                padding: "10px 0", borderRadius: 10, cursor: "pointer", fontSize: 14, fontWeight: 500, textAlign: "center",
+                padding: "10px 0", borderRadius: 15, cursor: "pointer", fontSize: 14, fontWeight: 600, textAlign: "center",
                 background: edit.status === k ? s.color : s.bg,
                 color: edit.status === k ? "#fff" : s.color,
                 border: `1.5px solid ${edit.status === k ? s.color : C.border}`
@@ -559,7 +570,7 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
           <div style={{ marginBottom: 14 }}>
             <label style={{ fontSize: 13, color: C.accent, display: "block", marginBottom: 5, fontWeight: 500 }}>失败原因</label>
             <input value={edit.failReason} onChange={e => set("failReason", e.target.value)} placeholder="请填写拒绝原因"
-              style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.accent}`, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
+              style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.accent}`, fontSize: 14, outline: "none", boxSizing: "border-box" }} />
           </div>
         )}
 
@@ -568,12 +579,12 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>跟进进展备注</label>
               <textarea value={edit.followNote} onChange={e => set("followNote", e.target.value)} rows={3} placeholder="记录当前跟进状态..."
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", resize: "none", boxSizing: "border-box" }} />
+                style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.border}`, fontSize: 14, outline: "none", resize: "none", boxSizing: "border-box" }} />
             </div>
             <div style={{ marginBottom: 14 }}>
               <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>转交给</label>
               <select value={edit.followStaff} onChange={e => set("followStaff", e.target.value)}
-                style={{ width: "100%", padding: "11px 14px", borderRadius: 10, border: `1.5px solid ${C.border}`, fontSize: 15, background: "#fff", outline: "none" }}>
+                style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.border}`, fontSize: 15, background: "#fff", outline: "none" }}>
                 {allStaff.map(s => <option key={s.name + s.teamId} value={s.name}>{s.name}（{s.teamName}）</option>)}
               </select>
               <div style={{ fontSize: 12, color: C.textSub, marginTop: 5 }}>当前跟进人：{c.followStaff || c.staff}</div>
@@ -593,19 +604,21 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
 // ─── 统计面板 ─────────────────────────────────────────────────────
 function StatsPanel({ teamStats, staffStats }) {
   const maxWon = Math.max(1, ...teamStats.map(t => t.won));
+  const maxStaffWon = Math.max(1, ...staffStats.map(s => s.won));
+  const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
   return (
     <div>
       <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>📊 销售统计</div>
 
-      <div style={{ background: "#fff", borderRadius: 16, padding: 18, boxShadow: C.shadow, marginBottom: 14 }}>
+      <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>🏆 战队排行</div>
         {teamStats.map((t, i) => (
           <div key={t.id} style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, alignItems: "center" }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{["🥇", "🥈", "🥉", "4️⃣", "5️⃣"][i]} {t.name}</span>
+              <span style={{ fontWeight: 600, fontSize: 14 }}>{medal(i)} {t.name}</span>
               <div style={{ textAlign: "right" }}>
                 <span style={{ fontSize: 13, color: C.primary, fontWeight: 700 }}>{t.won} 张成交</span>
-                <span style={{ fontSize: 12, color: C.textSub, marginLeft: 8 }}>今日 {t.wonT} · 成交率 {t.rate}</span>
+                <span style={{ fontSize: 12, color: C.textSub, marginLeft: 8 }}>今日成交 {t.wonT} · 录入 {t.total}</span>
               </div>
             </div>
             <div style={{ height: 9, borderRadius: 5, background: C.border }}>
@@ -615,18 +628,31 @@ function StatsPanel({ teamStats, staffStats }) {
         ))}
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 16, padding: 18, boxShadow: C.shadow }}>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>👤 个人业绩</div>
-        {staffStats.map((s, i) => (
-          <div key={s.name + s.teamId} style={{ display: "flex", alignItems: "center", padding: "11px 0", borderBottom: i < staffStats.length - 1 ? `1px solid ${C.border}` : "none" }}>
-            <div style={{ width: 30, height: 30, borderRadius: 15, background: C.primaryLight, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 700, color: C.primary, marginRight: 12, flexShrink: 0 }}>{i + 1}</div>
-            <div style={{ flex: 1 }}>
-              <div style={{ fontWeight: 600, fontSize: 14 }}>{s.name}</div>
-              <div style={{ fontSize: 12, color: C.textSub }}>{s.teamName}</div>
+      <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}` }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>👤 个人业绩排名</div>
+        {staffStats.length === 0 ? (
+          <div style={{ textAlign: "center", color: C.textSub, padding: "30px 0", fontSize: 14 }}>暂无员工数据</div>
+        ) : staffStats.map((s, i) => (
+          <div key={s.name + s.teamId} style={{ padding: "12px 0", borderBottom: i < staffStats.length - 1 ? `1px solid ${C.border}` : "none" }}>
+            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
+              <div style={{
+                width: 34, height: 34, borderRadius: 17,
+                background: i < 3 ? [C.warnLight, C.grayLight, C.accentLight][i] : C.primaryLight,
+                display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: i < 3 ? 17 : 13, fontWeight: 800, color: i < 3 ? C.text : C.primary,
+                marginRight: 12, flexShrink: 0
+              }}>{medal(i)}</div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
+                <div style={{ fontSize: 12, color: C.textSub }}>{s.teamName}</div>
+              </div>
+              <div style={{ textAlign: "right" }}>
+                <div style={{ fontWeight: 800, color: C.primary, fontSize: 16 }}>{s.won} 张成交</div>
+                <div style={{ fontSize: 12, color: C.textSub }}>今日成交 {s.wonT} · 今日录入 {s.todayTotal} · 总录入 {s.total}</div>
+              </div>
             </div>
-            <div style={{ textAlign: "right" }}>
-              <div style={{ fontWeight: 700, color: C.primary, fontSize: 15 }}>{s.won} 张</div>
-              <div style={{ fontSize: 12, color: C.textSub }}>今日 {s.wonT} · 成交率 {s.rate}</div>
+            <div style={{ height: 8, borderRadius: 4, background: C.border }}>
+              <div style={{ height: "100%", borderRadius: 4, background: [C.warn, C.primary, C.success, C.purple, C.accent][i % 5], width: `${Math.max(4, (s.won / maxStaffWon) * 100)}%`, transition: "width .6s" }} />
             </div>
           </div>
         ))}
@@ -680,7 +706,7 @@ function SettingsPanel({ settings, onUpdate, showToast }) {
       <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>⚙️ 系统设置</div>
 
       {/* 会员卡类型 */}
-      <div style={{ background: "#fff", borderRadius: 16, padding: 18, boxShadow: C.shadow, marginBottom: 14 }}>
+      <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>🎫 会员卡类型</div>
         {settings.cardTypes.map(v => (
           <div key={v} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "10px 0", borderBottom: `1px solid ${C.border}` }}>
@@ -697,7 +723,7 @@ function SettingsPanel({ settings, onUpdate, showToast }) {
       </div>
 
       {/* 战队管理 */}
-      <div style={{ background: "#fff", borderRadius: 16, padding: 18, boxShadow: C.shadow, marginBottom: 14 }}>
+      <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, marginBottom: 14 }}>
         <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>🚩 战队管理</div>
         {settings.teams.map(t => (
           <div key={t.id} style={{ marginBottom: 16, background: C.grayLight, borderRadius: 12, padding: 14 }}>
