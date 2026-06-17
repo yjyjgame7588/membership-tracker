@@ -1,0 +1,9 @@
+{
+  "functionsRoot": ".",
+  "functions": [
+    {
+      "name": "default",
+      "directory": "."
+    }
+  ]
+}

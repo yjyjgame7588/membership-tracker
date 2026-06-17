@@ -1,0 +1,16 @@
+{
+  "envId": "youyou-d3g8xhv9je8669b75",
+  "functionRoot": "functions",
+  "functions": [
+    {
+      "name": "jbApi",
+      "runtime": "Nodejs20.19",
+      "handler": "index.main",
+      "timeout": 10,
+      "memorySize": 256,
+      "envVariables": {
+        "ENV_ID": "youyou-d3g8xhv9je8669b75"
+      }
+    }
+  ]
+}

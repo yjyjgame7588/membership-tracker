@@ -33,6 +33,7 @@ const STATUS = {
 
 const today = () => new Date().toISOString().slice(0, 10);
 const fmtDate = (d) => { if (!d) return ""; const [, m, day] = d.split("-"); return `${m}/${day}`; };
+const API_URL = "https://youyou-d3g8xhv9je8669b75.service.tcloudbase.com/jb-api";
 
 // ─── 默认数据 ──────────────────────────────────────────────────────
 const DEFAULT_SETTINGS = {
@@ -45,11 +46,110 @@ const DEFAULT_SETTINGS = {
 };
 
 const SAMPLE = [
-  { id: 1, name: "张小宝", phone: "13800001111", staff: "王小明", teamId: "t1", date: today(), card: "京贝体验会员卡", status: "success", failReason: "", followNote: "", followStaff: "王小明" },
+  { id: 1, name: "张小宝", phone: "13800001111", staff: "王小明", teamId: "t1", date: today(), card: "京贝体验会员卡", status: "success", failReason: "", followNote: "", followStaff: "王小明", contributors: ["王小明"] },
   { id: 2, name: "李彤彤", phone: "13900002222", staff: "张芳", teamId: "t2", date: today(), card: "京贝体验会员卡", status: "following", failReason: "", followNote: "已发微信，等回复", followStaff: "张芳" },
   { id: 3, name: "王大毛", phone: "13700003333", staff: "陈静", teamId: "t3", date: today(), card: "京贝年度会员卡", status: "failed", failReason: "价格太贵，暂不考虑", followNote: "", followStaff: "陈静" },
   { id: 4, name: "赵小花", phone: "13600004444", staff: "李华", teamId: "t1", date: today(), card: "京贝体验会员卡", status: "pending", failReason: "", followNote: "", followStaff: "李华" },
 ];
+
+async function api(action, payload = {}) {
+  const response = await fetch(API_URL, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ action, ...payload }),
+  });
+  const data = await response.json().catch(() => ({}));
+  if (!response.ok || !data.ok) throw new Error(data.message || "云端同步失败");
+  return data;
+}
+
+const uniqueNames = (names) => Array.from(new Set((names || []).map(v => String(v || "").trim()).filter(Boolean))).slice(0, 2);
+const getContributors = (customer) => {
+  if (customer.status !== "success") return [];
+  const saved = uniqueNames(customer.contributors);
+  if (saved.length > 0) return saved;
+  return customer.staff ? [customer.staff] : [];
+};
+const creditText = (value) => Number.isInteger(value) ? String(value) : value.toFixed(1);
+const pctText = (won, total) => total > 0 ? `${Math.round((won / total) * 100)}%` : "0%";
+const daysAgo = (count) => {
+  const d = new Date();
+  d.setDate(d.getDate() - count);
+  return d.toISOString().slice(0, 10);
+};
+const monthStart = () => {
+  const d = new Date();
+  d.setDate(1);
+  return d.toISOString().slice(0, 10);
+};
+const inDateRange = (customer, start, end) => {
+  if (start && customer.date < start) return false;
+  if (end && customer.date > end) return false;
+  return true;
+};
+const normalizeCustomer = (customer, fallbackIndex = 0) => ({
+  id: customer.id || Date.now() + fallbackIndex,
+  name: String(customer.name || "").trim(),
+  phone: String(customer.phone || "").trim(),
+  staff: String(customer.staff || "").trim(),
+  teamId: customer.teamId || "",
+  date: customer.date || today(),
+  card: customer.card || "",
+  status: customer.status || "pending",
+  failReason: customer.failReason || "",
+  followNote: customer.followNote || "",
+  followStaff: customer.followStaff || customer.staff || "",
+  contributors: uniqueNames(customer.contributors || (customer.status === "success" ? [customer.staff] : [])),
+});
+const buildStaffStats = (list, allStaff) => allStaff.map(s => {
+  let won = 0;
+  let wonT = 0;
+  let todayTotal = 0;
+  const participatedIds = new Set();
+  const todayIds = new Set();
+
+  list.forEach((customer) => {
+    const contributors = getContributors(customer);
+    const isParticipant = customer.staff === s.name || customer.followStaff === s.name || contributors.includes(s.name);
+    if (!isParticipant) return;
+    participatedIds.add(customer.id);
+    if (customer.date === today()) {
+      todayIds.add(customer.id);
+      todayTotal += 1;
+    }
+    if (customer.status === "success" && contributors.includes(s.name)) {
+      const credit = 1 / Math.max(1, contributors.length);
+      won += credit;
+      if (customer.date === today()) wonT += credit;
+    }
+  });
+
+  const total = participatedIds.size;
+  return { ...s, total, won, wonT, todayTotal, todayCount: todayIds.size, rate: total > 0 ? won / total : 0 };
+}).sort((a, b) => b.won - a.won || b.rate - a.rate || b.total - a.total || a.name.localeCompare(b.name, "zh-CN"));
+const buildTeamStats = (list, teams, allStaff) => {
+  const staffTeam = new Map(allStaff.map(s => [s.name, s.teamId]));
+  return teams.map(t => {
+    let won = 0;
+    let wonT = 0;
+    const teamCustomers = list.filter(c => c.teamId === t.id);
+    const todayCustomers = teamCustomers.filter(c => c.date === today());
+
+    list.forEach((customer) => {
+      if (customer.status !== "success") return;
+      const contributors = getContributors(customer);
+      contributors.forEach((name) => {
+        const teamId = staffTeam.get(name) || customer.teamId;
+        if (teamId !== t.id) return;
+        const credit = 1 / Math.max(1, contributors.length);
+        won += credit;
+        if (customer.date === today()) wonT += credit;
+      });
+    });
+
+    return { ...t, total: teamCustomers.length, won, wonT, todayTotal: todayCustomers.length };
+  }).sort((a, b) => b.won - a.won || b.total - a.total);
+};
 
 // ─── 工具组件 ──────────────────────────────────────────────────────
 function Badge({ status }) {
@@ -119,34 +219,104 @@ export default function App() {
   const [settings, setSettings] = useState(DEFAULT_SETTINGS);
   const [tab, setTab] = useState("stats");
   const [toast, setToast] = useState(null);
+  const [syncState, setSyncState] = useState("loading");
   const [dupModal, setDupModal] = useState(null);
   const [detailId, setDetailId] = useState(null);
   const [filterTeam, setFilterTeam] = useState("全部");
   const [filterStatus, setFilterStatus] = useState("全部");
   const [searchQ, setSearchQ] = useState("");
   const [pendingForm, setPendingForm] = useState(null);
+  const [historyRange, setHistoryRange] = useState({ start: monthStart(), end: today() });
 
   // 表单
-  const blankForm = () => ({ name: "", phone: "", staff: "", teamId: "", date: today(), card: settings.cardTypes[0] || "", status: "pending", failReason: "", followNote: "", followStaff: "" });
+  const blankForm = () => ({ name: "", phone: "", staff: "", teamId: "", date: today(), card: settings.cardTypes[0] || "", status: "pending", failReason: "", followNote: "", followStaff: "", contributors: [] });
   const [form, setForm] = useState(blankForm());
   const [addOpen, setAddOpen] = useState(false);
 
   // ── 加载 ──
   useEffect(() => {
-    try {
-      const c = localStorage.getItem("jb_customers");
-      const s = localStorage.getItem("jb_settings");
-      if (c) setCustomers(JSON.parse(c)); else setCustomers(SAMPLE);
-      if (s) setSettings(JSON.parse(s));
-    } catch { setCustomers(SAMPLE); }
+    let alive = true;
+
+    const load = async () => {
+      try {
+        const data = await api("load");
+        if (!alive) return;
+        setCustomers(data.customers || []);
+        setSettings(data.settings || DEFAULT_SETTINGS);
+        localStorage.setItem("jb_customers_cache", JSON.stringify(data.customers || []));
+        localStorage.setItem("jb_settings_cache", JSON.stringify(data.settings || DEFAULT_SETTINGS));
+        setSyncState("cloud");
+      } catch (error) {
+        if (!alive) return;
+        try {
+          const c = localStorage.getItem("jb_customers_cache") || localStorage.getItem("jb_customers");
+          const s = localStorage.getItem("jb_settings_cache") || localStorage.getItem("jb_settings");
+          if (c) setCustomers(JSON.parse(c)); else setCustomers(SAMPLE);
+          if (s) setSettings(JSON.parse(s));
+        } catch {
+          setCustomers(SAMPLE);
+        }
+        setSyncState("offline");
+        showToast("error", "云端加载失败，暂用本机缓存");
+      }
+    };
+
+    load();
+    return () => { alive = false; };
   }, []);
 
-  const saveC = useCallback((data) => { try { localStorage.setItem("jb_customers", JSON.stringify(data)); } catch {} }, []);
-  const saveS = useCallback((data) => { try { localStorage.setItem("jb_settings", JSON.stringify(data)); } catch {} }, []);
+  const saveC = useCallback((data) => { try { localStorage.setItem("jb_customers_cache", JSON.stringify(data)); } catch {} }, []);
+  const saveS = useCallback((data) => { try { localStorage.setItem("jb_settings_cache", JSON.stringify(data)); } catch {} }, []);
 
   const showToast = (type, text) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 2800);
+  };
+
+  const exportData = () => {
+    const backup = {
+      app: "京贝儿童门诊会员营销系统",
+      version: 1,
+      exportedAt: new Date().toISOString(),
+      customers: normalizedCustomers,
+      settings,
+    };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = `京贝会员数据备份-${today()}.json`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+    showToast("success", "已导出到本地");
+  };
+
+  const importData = async (event) => {
+    const file = event.target.files?.[0];
+    event.target.value = "";
+    if (!file) return;
+
+    try {
+      const text = await file.text();
+      const data = JSON.parse(text);
+      const incomingCustomers = Array.isArray(data.customers) ? data.customers.map(normalizeCustomer).filter(c => c.name && c.phone) : null;
+      const incomingSettings = data.settings && Array.isArray(data.settings.teams) && Array.isArray(data.settings.cardTypes) ? data.settings : null;
+      if (!incomingCustomers || !incomingSettings) throw new Error("文件格式不正确");
+      const okReplace = window.confirm(`确认导入这份本地备份吗？\n\n将替换当前云端数据：${incomingCustomers.length} 位顾客记录。`);
+      if (!okReplace) return;
+
+      setCustomers(incomingCustomers);
+      setSettings(incomingSettings);
+      saveC(incomingCustomers);
+      saveS(incomingSettings);
+      await api("replaceAll", { customers: incomingCustomers, settings: incomingSettings });
+      setSyncState("cloud");
+      showToast("success", "已导入并同步到云端");
+    } catch (error) {
+      showToast("error", error.message || "导入失败");
+    }
   };
 
   // ── 所有员工列表 ──
@@ -156,7 +326,7 @@ export default function App() {
   // ── 添加顾客 ──
   const openAdd = () => {
     const f = blankForm();
-    if (allStaff.length > 0) { f.staff = allStaff[0].name; f.teamId = allStaff[0].teamId; f.followStaff = allStaff[0].name; }
+    if (allStaff.length > 0) { f.staff = allStaff[0].name; f.teamId = allStaff[0].teamId; f.followStaff = allStaff[0].name; f.contributors = [allStaff[0].name]; }
     if (settings.cardTypes.length > 0) f.card = settings.cardTypes[0];
     setForm(f);
     setAddOpen(true);
@@ -165,16 +335,17 @@ export default function App() {
 
   const handleStaffChange = (name) => {
     const s = allStaff.find(x => x.name === name);
-    setForm(f => ({ ...f, staff: name, teamId: s ? s.teamId : f.teamId, followStaff: name }));
+    setForm(f => ({ ...f, staff: name, teamId: s ? s.teamId : f.teamId, followStaff: name, contributors: uniqueNames([name, ...(f.contributors || [])]) }));
   };
 
-  const handleAdd = (force = false) => {
+  const handleAdd = async (force = false) => {
     const cleanName = form.name.trim();
     const cleanPhone = form.phone.trim();
     if (!cleanName) { showToast("error", "请填写顾客姓名"); return; }
     if (!cleanPhone) { showToast("error", "请填写手机号"); return; }
     if (!/^1\d{10}$/.test(cleanPhone)) { showToast("error", "手机号格式不正确"); return; }
     if (form.status === "failed" && !form.failReason.trim()) { showToast("error", "请填写营销失败原因"); return; }
+    if (form.status === "success" && uniqueNames(form.contributors).length === 0) { showToast("error", "请选择成交人"); return; }
 
     const duplicates = customers.filter(c => c.phone === cleanPhone || c.name.trim() === cleanName);
     if (duplicates.length > 0 && !force) {
@@ -189,70 +360,102 @@ export default function App() {
       return;
     }
 
-    const newC = { id: Date.now(), ...form, name: cleanName, phone: cleanPhone };
+    const newC = normalizeCustomer({ id: Date.now(), ...form, name: cleanName, phone: cleanPhone });
     const updated = [newC, ...customers];
     setCustomers(updated); saveC(updated);
-    showToast("success", `已添加：${newC.name}`);
     setAddOpen(false);
-    setTab("home");
+    setTab("stats");
+    try {
+      await api("addCustomer", { customer: newC });
+      showToast("success", `已云端添加：${newC.name}`);
+      setSyncState("cloud");
+    } catch (error) {
+      showToast("error", "已临时保存，本次云端同步失败");
+      setSyncState("offline");
+    }
   };
 
-  const confirmDup = () => {
+  const confirmDup = async () => {
     if (!pendingForm) return;
-    const newC = { id: Date.now(), ...pendingForm, name: pendingForm.name.trim(), phone: pendingForm.phone.trim() };
+    const newC = normalizeCustomer({ id: Date.now(), ...pendingForm, name: pendingForm.name.trim(), phone: pendingForm.phone.trim() });
     const updated = [newC, ...customers];
     setCustomers(updated); saveC(updated);
-    showToast("success", `已强制添加：${newC.name}`);
     setDupModal(null); setPendingForm(null);
-    setAddOpen(false); setTab("home");
+    setAddOpen(false); setTab("stats");
+    try {
+      await api("addCustomer", { customer: newC });
+      showToast("success", `已云端添加：${newC.name}`);
+      setSyncState("cloud");
+    } catch (error) {
+      showToast("error", "已临时保存，本次云端同步失败");
+      setSyncState("offline");
+    }
   };
 
   // ── 更新顾客 ──
-  const updateCustomer = (id, patch) => {
+  const updateCustomer = async (id, patch) => {
     const updated = customers.map(c => c.id === id ? { ...c, ...patch } : c);
     setCustomers(updated); saveC(updated);
+    try {
+      await api("updateCustomer", { id, patch });
+      showToast("success", "已同步更新");
+      setSyncState("cloud");
+    } catch (error) {
+      showToast("error", "已临时保存，本次云端同步失败");
+      setSyncState("offline");
+    }
   };
 
-  const deleteCustomer = (id) => {
+  const deleteCustomer = async (id) => {
     const updated = customers.filter(c => c.id !== id);
     setCustomers(updated); saveC(updated);
     setDetailId(null);
-    showToast("success", "已删除");
+    try {
+      await api("deleteCustomer", { id });
+      showToast("success", "已云端删除");
+      setSyncState("cloud");
+    } catch (error) {
+      showToast("error", "本机已删除，云端同步失败");
+      setSyncState("offline");
+    }
   };
 
   // ── 统计 ──
-  const todayC = customers.filter(c => c.date === today());
-  const teamStats = settings.teams.map(t => {
-    const all = customers.filter(c => c.teamId === t.id);
-    const allT = todayC.filter(c => c.teamId === t.id);
-    const won = all.filter(c => c.status === "success").length;
-    const wonT = allT.filter(c => c.status === "success").length;
-    return { ...t, total: all.length, won, wonT, todayTotal: allT.length };
-  }).sort((a, b) => b.won - a.won);
-
-  const staffStats = allStaff.map(s => {
-    const all = customers.filter(c => c.staff === s.name);
-    const won = all.filter(c => c.status === "success").length;
-    const wonT = todayC.filter(c => c.staff === s.name && c.status === "success").length;
-    const todayTotal = todayC.filter(c => c.staff === s.name).length;
-    return { ...s, total: all.length, won, wonT, todayTotal };
-  }).sort((a, b) => b.won - a.won || b.total - a.total || a.name.localeCompare(b.name, "zh-CN"));
+  const normalizedCustomers = customers.map(normalizeCustomer);
+  const todayC = normalizedCustomers.filter(c => c.date === today());
+  const historyCustomers = normalizedCustomers.filter(c => inDateRange(c, historyRange.start, historyRange.end));
+  const teamStats = buildTeamStats(normalizedCustomers, settings.teams, allStaff);
+  const staffStats = buildStaffStats(normalizedCustomers, allStaff);
+  const historyStaffStats = buildStaffStats(historyCustomers, allStaff);
+  const historySummary = {
+    total: historyCustomers.length,
+    won: historyCustomers.filter(c => c.status === "success").length,
+    following: historyCustomers.filter(c => c.status === "following").length,
+    failed: historyCustomers.filter(c => c.status === "failed").length,
+  };
 
   // ── 筛选 ──
-  const displayList = customers.filter(c => {
+  const displayList = normalizedCustomers.filter(c => {
     if (filterTeam !== "全部" && c.teamId !== filterTeam) return false;
     if (filterStatus !== "全部" && c.status !== filterStatus) return false;
     if (searchQ && !c.name.includes(searchQ) && !c.phone.includes(searchQ)) return false;
     return true;
   });
 
-  const followingList = customers.filter(c => c.status === "following");
-  const detailC = customers.find(c => c.id === detailId);
+  const followingList = normalizedCustomers.filter(c => c.status === "following");
+  const detailC = normalizedCustomers.find(c => c.id === detailId);
 
   // ── 设置更新 ──
-  const updateSettings = (patch) => {
+  const updateSettings = async (patch) => {
     const s = { ...settings, ...patch };
     setSettings(s); saveS(s);
+    try {
+      await api("saveSettings", { settings: s });
+      setSyncState("cloud");
+    } catch (error) {
+      showToast("error", "设置已临时保存，云端同步失败");
+      setSyncState("offline");
+    }
   };
 
   // ══════════════════════════════════════════════════════════════
@@ -265,7 +468,9 @@ export default function App() {
           <div style={{ width: 46, height: 46, borderRadius: 16, background: "rgba(255,255,255,0.55)", display: "flex", alignItems: "center", justifyContent: "center", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.65), 0 8px 18px rgba(75,95,140,.12)" }}><CuteLogo /></div>
           <div style={{ flex: 1 }}>
             <div style={{ color: "#fff", fontWeight: 900, fontSize: 17, letterSpacing: 0.3, textShadow: "0 2px 8px rgba(79,89,130,.18)" }}>京贝儿童门诊会员营销系统</div>
-            <div style={{ color: "rgba(255,255,255,0.86)", fontSize: 12, fontWeight: 600 }}>{today()} · 今日录入 {todayC.length} 条</div>
+            <div style={{ color: "rgba(255,255,255,0.86)", fontSize: 12, fontWeight: 600 }}>
+              {today()} · 今日录入 {todayC.length} 条 · {syncState === "cloud" ? "云端同步" : syncState === "loading" ? "加载云端" : "本机缓存"}
+            </div>
           </div>
           {followingList.length > 0 && (
             <div onClick={() => setTab("follow")} style={{ background: "#fff", color: C.accent, borderRadius: 20, padding: "6px 12px", fontSize: 12, fontWeight: 800, cursor: "pointer", boxShadow: "0 8px 18px rgba(255,122,156,0.28)" }}>
@@ -340,7 +545,7 @@ export default function App() {
         {tab === "add" && (
           <AddForm form={form} setForm={setForm} allStaff={allStaff} settings={settings}
             onStaffChange={handleStaffChange} onSubmit={() => handleAdd(false)}
-            onCancel={() => { setAddOpen(false); setTab("home"); }} C={C} />
+            onCancel={() => { setAddOpen(false); setTab("stats"); }} C={C} />
         )}
 
         {/* ══ 跟进列表 ══ */}
@@ -357,12 +562,20 @@ export default function App() {
 
         {/* ══ 统计 ══ */}
         {tab === "stats" && (
-          <StatsPanel teamStats={teamStats} staffStats={staffStats} C={C} />
+          <StatsPanel
+            teamStats={teamStats}
+            staffStats={staffStats}
+            historyStaffStats={historyStaffStats}
+            historySummary={historySummary}
+            historyRange={historyRange}
+            setHistoryRange={setHistoryRange}
+            C={C}
+          />
         )}
 
         {/* ══ 设置 ══ */}
         {tab === "settings" && (
-          <SettingsPanel settings={settings} onUpdate={updateSettings} showToast={showToast} C={C} />
+          <SettingsPanel settings={settings} onUpdate={updateSettings} showToast={showToast} onExport={exportData} onImport={importData} C={C} />
         )}
       </div>
 
@@ -441,6 +654,12 @@ function CustCard({ c, teamName, onClick, showNote }) {
         <span>🎫 {c.card}</span>
         <span>📅 {fmtDate(c.date)}</span>
       </div>
+      {c.status === "success" && getContributors(c).length > 0 && (
+        <div style={{ marginTop: 8, fontSize: 13, background: C.successLight, borderRadius: 10, padding: "6px 10px", color: C.text }}>
+          🌟 成交人：{getContributors(c).join(" + ")}
+          {getContributors(c).length === 2 && <span style={{ color: C.textSub }}>（各 0.5）</span>}
+        </div>
+      )}
       {showNote && c.followNote && (
         <div style={{ marginTop: 8, fontSize: 13, background: C.warnLight, borderRadius: 8, padding: "6px 10px", color: C.text }}>📝 {c.followNote}</div>
       )}
@@ -455,6 +674,16 @@ function CustCard({ c, teamName, onClick, showNote }) {
 function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, onCancel }) {
   const f = form;
   const set = (k, v) => setForm(x => ({ ...x, [k]: v }));
+  const selectStatus = (status) => setForm(x => ({
+    ...x,
+    status,
+    contributors: status === "success" ? uniqueNames((x.contributors || []).length ? x.contributors : [x.staff]) : x.contributors,
+  }));
+  const toggleContributor = (name) => setForm(x => {
+    const current = uniqueNames(x.contributors);
+    const next = current.includes(name) ? current.filter(v => v !== name) : uniqueNames([...current, name]);
+    return { ...x, contributors: next };
+  });
   return (
     <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 20, boxShadow: C.shadow, border: `1.5px solid ${C.border}` }}>
       <div style={{ fontWeight: 800, fontSize: 17, marginBottom: 18, color: C.primary }}>🌈 录入新顾客</div>
@@ -489,7 +718,7 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
         <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>状态</label>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
           {Object.entries(STATUS).map(([k, s]) => (
-            <div key={k} onClick={() => set("status", k)} style={{
+            <div key={k} onClick={() => selectStatus(k)} style={{
               padding: "10px 0", borderRadius: 15, cursor: "pointer", fontSize: 14, fontWeight: 600, textAlign: "center",
               background: f.status === k ? s.color : s.bg,
               color: f.status === k ? "#fff" : s.color,
@@ -498,6 +727,26 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
           ))}
         </div>
       </div>
+
+      {f.status === "success" && (
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>成交人（最多 2 人）</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {allStaff.map(s => {
+              const picked = uniqueNames(f.contributors).includes(s.name);
+              return (
+                <div key={s.name + s.teamId} onClick={() => toggleContributor(s.name)} style={{
+                  padding: "8px 12px", borderRadius: 14, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                  background: picked ? C.success : C.successLight,
+                  color: picked ? "#fff" : C.success,
+                  border: `1.5px solid ${picked ? C.success : C.border}`,
+                }}>{picked ? "✓ " : ""}{s.name}</div>
+              );
+            })}
+          </div>
+          <div style={{ fontSize: 12, color: C.textSub, marginTop: 6 }}>选择 2 人时，每人按 0.5 单计入排名。</div>
+        </div>
+      )}
 
       {f.status === "failed" && (
         <div style={{ marginBottom: 14 }}>
@@ -534,9 +783,23 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
 
 // ─── 顾客详情弹窗 ─────────────────────────────────────────────────
 function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, settings }) {
-  const [edit, setEdit] = useState({ status: c.status, failReason: c.failReason, followNote: c.followNote, followStaff: c.followStaff });
+  const [edit, setEdit] = useState({ status: c.status, failReason: c.failReason, followNote: c.followNote, followStaff: c.followStaff, contributors: getContributors(c) });
   const set = (k, v) => setEdit(x => ({ ...x, [k]: v }));
-  const save = () => { onUpdate(edit); onClose(); };
+  const selectStatus = (status) => setEdit(x => ({
+    ...x,
+    status,
+    contributors: status === "success" ? uniqueNames((x.contributors || []).length ? x.contributors : [c.staff]) : x.contributors,
+  }));
+  const toggleContributor = (name) => setEdit(x => {
+    const current = uniqueNames(x.contributors);
+    const next = current.includes(name) ? current.filter(v => v !== name) : uniqueNames([...current, name]);
+    return { ...x, contributors: next };
+  });
+  const save = () => {
+    if (edit.status === "success" && uniqueNames(edit.contributors).length === 0) return;
+    onUpdate({ ...edit, contributors: uniqueNames(edit.contributors) });
+    onClose();
+  };
 
   return (
     <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.55)", zIndex: 300, display: "flex", alignItems: "flex-end", justifyContent: "center" }}>
@@ -556,7 +819,7 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
           <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 8, fontWeight: 500 }}>更新状态</label>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
             {Object.entries(STATUS).map(([k, s]) => (
-              <div key={k} onClick={() => set("status", k)} style={{
+              <div key={k} onClick={() => selectStatus(k)} style={{
                 padding: "10px 0", borderRadius: 15, cursor: "pointer", fontSize: 14, fontWeight: 600, textAlign: "center",
                 background: edit.status === k ? s.color : s.bg,
                 color: edit.status === k ? "#fff" : s.color,
@@ -565,6 +828,26 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
             ))}
           </div>
         </div>
+
+        {edit.status === "success" && (
+          <div style={{ marginBottom: 14 }}>
+            <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>成交人（最多 2 人）</label>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {allStaff.map(s => {
+                const picked = uniqueNames(edit.contributors).includes(s.name);
+                return (
+                  <div key={s.name + s.teamId} onClick={() => toggleContributor(s.name)} style={{
+                    padding: "8px 12px", borderRadius: 14, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                    background: picked ? C.success : C.successLight,
+                    color: picked ? "#fff" : C.success,
+                    border: `1.5px solid ${picked ? C.success : C.border}`,
+                  }}>{picked ? "✓ " : ""}{s.name}</div>
+                );
+              })}
+            </div>
+            <div style={{ fontSize: 12, color: C.textSub, marginTop: 6 }}>选择 2 人时，每人按 0.5 单计入排名。</div>
+          </div>
+        )}
 
         {edit.status === "failed" && (
           <div style={{ marginBottom: 14 }}>
@@ -602,23 +885,133 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
 }
 
 // ─── 统计面板 ─────────────────────────────────────────────────────
-function StatsPanel({ teamStats, staffStats }) {
-  const maxWon = Math.max(1, ...teamStats.map(t => t.won));
-  const maxStaffWon = Math.max(1, ...staffStats.map(s => s.won));
+function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, historyRange, setHistoryRange }) {
   const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
+  const maxWon = Math.max(1, ...teamStats.map(t => t.won));
+  const dailyRank = [...staffStats].sort((a, b) => b.wonT - a.wonT || b.todayTotal - a.todayTotal || a.name.localeCompare(b.name, "zh-CN"));
+  const topThree = dailyRank.slice(0, 3);
+  const restDaily = dailyRank.slice(3);
+  const maxHistoryWon = Math.max(1, ...historyStaffStats.map(s => s.won));
+  const totalCredit = historyStaffStats.reduce((sum, s) => sum + s.won, 0);
+
+  const quickRange = (type) => {
+    if (type === "today") setHistoryRange({ start: today(), end: today() });
+    if (type === "week") setHistoryRange({ start: daysAgo(6), end: today() });
+    if (type === "month") setHistoryRange({ start: monthStart(), end: today() });
+  };
+
   return (
     <div>
-      <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>📊 销售统计</div>
+      <style>{`
+        @keyframes jbConfettiFall {
+          0% { transform: translateY(-18px) rotate(0deg); opacity: .15; }
+          50% { opacity: .85; }
+          100% { transform: translateY(130px) rotate(240deg); opacity: .05; }
+        }
+        @keyframes jbWinnerGlow {
+          0%, 100% { transform: translateY(0); box-shadow: 0 12px 30px rgba(255, 184, 77, .28); }
+          50% { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(255, 122, 156, .32); }
+        }
+      `}</style>
+      <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 14 }}>今日喜报</div>
+
+      <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(255,246,166,.92), rgba(255,210,228,.9) 48%, rgba(189,235,255,.92))", borderRadius: 24, padding: 18, boxShadow: C.shadowMd, border: "1.5px solid rgba(255,255,255,.78)", marginBottom: 14 }}>
+        {Array.from({ length: 18 }).map((_, i) => (
+          <span key={i} style={{
+            position: "absolute",
+            top: -20,
+            left: `${(i * 17) % 100}%`,
+            width: i % 3 === 0 ? 10 : 7,
+            height: i % 3 === 0 ? 18 : 12,
+            borderRadius: i % 2 === 0 ? 5 : 2,
+            background: [C.accent, C.primary, C.success, C.warn, C.purple][i % 5],
+            opacity: 0.55,
+            animation: `jbConfettiFall ${3.2 + (i % 5) * 0.55}s linear ${i * 0.17}s infinite`,
+          }} />
+        ))}
+        <div style={{ position: "relative", zIndex: 1 }}>
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+            <MiniStat label="今日成交" value={`${creditText(staffStats.reduce((sum, s) => sum + s.wonT, 0))} 单`} color={C.accent} />
+            <MiniStat label="今日录入" value={`${staffStats.reduce((sum, s) => sum + s.todayTotal, 0)} 位`} color={C.primary} />
+            <MiniStat label="跟进加油" value="继续冲" color={C.success} />
+          </div>
+
+          <div style={{ display: "grid", gridTemplateColumns: "1.15fr .95fr .95fr", gap: 8, alignItems: "end", marginBottom: 14 }}>
+            {topThree.map((s, i) => {
+              const order = i === 0 ? 0 : i === 1 ? 1 : 2;
+              const colors = [
+                ["#FFD76A", "#FF7A9C"],
+                ["#DCE8FF", "#5BA7FF"],
+                ["#FFD9B0", "#FF9F43"],
+              ];
+              return (
+                <div key={s.name + s.teamId} style={{
+                  minHeight: i === 0 ? 145 : 120,
+                  borderRadius: 22,
+                  padding: "14px 10px",
+                  textAlign: "center",
+                  background: `linear-gradient(160deg, ${colors[order][0]}, rgba(255,255,255,.92))`,
+                  border: "1.5px solid rgba(255,255,255,.82)",
+                  animation: i === 0 ? "jbWinnerGlow 2.8s ease-in-out infinite" : "none",
+                  boxShadow: "0 12px 26px rgba(103,87,160,.14)",
+                }}>
+                  <div style={{ fontSize: i === 0 ? 31 : 25, lineHeight: 1 }}>{medal(i)}</div>
+                  <div style={{ fontWeight: 900, fontSize: i === 0 ? 18 : 15, marginTop: 8 }}>{s.name}</div>
+                  <div style={{ color: C.textSub, fontSize: 12, marginTop: 3 }}>{s.teamName}</div>
+                  <div style={{ color: colors[order][1], fontWeight: 900, fontSize: i === 0 ? 24 : 20, marginTop: 8 }}>{creditText(s.wonT)}</div>
+                  <div style={{ color: C.textSub, fontSize: 12 }}>今日成交</div>
+                  <div style={{ color: C.textSub, fontSize: 11, marginTop: 4 }}>成交率 {pctText(s.wonT, s.todayTotal)}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {restDaily.map((s, i) => (
+            <RankRow key={s.name + s.teamId} rank={i + 4} name={s.name} sub={`${s.teamName} · 今日录入 ${s.todayTotal}`} value={`${creditText(s.wonT)} 单`} rate={pctText(s.wonT, s.todayTotal)} color={C.primary} />
+          ))}
+        </div>
+      </div>
 
       <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, marginBottom: 14 }}>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>🏆 战队排行</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
+          <div style={{ fontWeight: 800, fontSize: 15 }}>历史成交查询</div>
+          <div style={{ display: "flex", gap: 6 }}>
+            <Btn small outline color={C.primary} onClick={() => quickRange("today")}>今天</Btn>
+            <Btn small outline color={C.primary} onClick={() => quickRange("week")}>7天</Btn>
+            <Btn small outline color={C.primary} onClick={() => quickRange("month")}>本月</Btn>
+          </div>
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 12 }}>
+          <Input label="开始日期" value={historyRange.start} type="date" onChange={e => setHistoryRange(r => ({ ...r, start: e.target.value }))} />
+          <Input label="结束日期" value={historyRange.end} type="date" onChange={e => setHistoryRange(r => ({ ...r, end: e.target.value }))} />
+        </div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
+          <MiniStat label="录入" value={historySummary.total} color={C.primary} />
+          <MiniStat label="成交" value={historySummary.won} color={C.success} />
+          <MiniStat label="跟进" value={historySummary.following} color={C.warn} />
+          <MiniStat label="失败" value={historySummary.failed} color={C.accent} />
+        </div>
+        <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 10 }}>个人历史排名</div>
+        {historyStaffStats.map((s, i) => (
+          <div key={s.name + s.teamId} style={{ marginBottom: 10 }}>
+            <RankRow rank={i + 1} name={s.name} sub={`${s.teamName} · 参与 ${s.total} 位`} value={`${creditText(s.won)} 单`} rate={`成交率 ${pctText(s.won, s.total)}`} color={[C.warn, C.primary, C.success, C.purple, C.accent][i % 5]} />
+            <div style={{ height: 7, borderRadius: 5, background: C.border }}>
+              <div style={{ height: "100%", borderRadius: 5, background: [C.warn, C.primary, C.success, C.purple, C.accent][i % 5], width: `${Math.max(4, (s.won / maxHistoryWon) * 100)}%`, transition: "width .6s" }} />
+            </div>
+          </div>
+        ))}
+        <div style={{ fontSize: 12, color: C.textSub, marginTop: 8 }}>区间成交积分合计：{creditText(totalCredit)} 单；两人合作成交时每人计 0.5 单。</div>
+      </div>
+
+      <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, marginBottom: 14 }}>
+        <div style={{ fontWeight: 800, fontSize: 15, marginBottom: 14 }}>战队累计排行</div>
         {teamStats.map((t, i) => (
           <div key={t.id} style={{ marginBottom: 16 }}>
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 6, alignItems: "center" }}>
-              <span style={{ fontWeight: 600, fontSize: 14 }}>{medal(i)} {t.name}</span>
+              <span style={{ fontWeight: 700, fontSize: 14 }}>{medal(i)} {t.name}</span>
               <div style={{ textAlign: "right" }}>
-                <span style={{ fontSize: 13, color: C.primary, fontWeight: 700 }}>{t.won} 张成交</span>
-                <span style={{ fontSize: 12, color: C.textSub, marginLeft: 8 }}>今日成交 {t.wonT} · 录入 {t.total}</span>
+                <span style={{ fontSize: 13, color: C.primary, fontWeight: 800 }}>{creditText(t.won)} 单成交</span>
+                <span style={{ fontSize: 12, color: C.textSub, marginLeft: 8 }}>今日 {creditText(t.wonT)} · 录入 {t.total}</span>
               </div>
             </div>
             <div style={{ height: 9, borderRadius: 5, background: C.border }}>
@@ -627,42 +1020,37 @@ function StatsPanel({ teamStats, staffStats }) {
           </div>
         ))}
       </div>
+    </div>
+  );
+}
 
-      <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}` }}>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 14 }}>👤 个人业绩排名</div>
-        {staffStats.length === 0 ? (
-          <div style={{ textAlign: "center", color: C.textSub, padding: "30px 0", fontSize: 14 }}>暂无员工数据</div>
-        ) : staffStats.map((s, i) => (
-          <div key={s.name + s.teamId} style={{ padding: "12px 0", borderBottom: i < staffStats.length - 1 ? `1px solid ${C.border}` : "none" }}>
-            <div style={{ display: "flex", alignItems: "center", marginBottom: 8 }}>
-              <div style={{
-                width: 34, height: 34, borderRadius: 17,
-                background: i < 3 ? [C.warnLight, C.grayLight, C.accentLight][i] : C.primaryLight,
-                display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: i < 3 ? 17 : 13, fontWeight: 800, color: i < 3 ? C.text : C.primary,
-                marginRight: 12, flexShrink: 0
-              }}>{medal(i)}</div>
-              <div style={{ flex: 1 }}>
-                <div style={{ fontWeight: 700, fontSize: 15 }}>{s.name}</div>
-                <div style={{ fontSize: 12, color: C.textSub }}>{s.teamName}</div>
-              </div>
-              <div style={{ textAlign: "right" }}>
-                <div style={{ fontWeight: 800, color: C.primary, fontSize: 16 }}>{s.won} 张成交</div>
-                <div style={{ fontSize: 12, color: C.textSub }}>今日成交 {s.wonT} · 今日录入 {s.todayTotal} · 总录入 {s.total}</div>
-              </div>
-            </div>
-            <div style={{ height: 8, borderRadius: 4, background: C.border }}>
-              <div style={{ height: "100%", borderRadius: 4, background: [C.warn, C.primary, C.success, C.purple, C.accent][i % 5], width: `${Math.max(4, (s.won / maxStaffWon) * 100)}%`, transition: "width .6s" }} />
-            </div>
-          </div>
-        ))}
+function MiniStat({ label, value, color }) {
+  return (
+    <div style={{ background: "rgba(255,255,255,.76)", borderRadius: 16, padding: "10px 8px", textAlign: "center", border: "1px solid rgba(255,255,255,.88)" }}>
+      <div style={{ color, fontWeight: 900, fontSize: 18 }}>{value}</div>
+      <div style={{ color: C.textSub, fontSize: 11, marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function RankRow({ rank, name, sub, value, rate, color }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "9px 0" }}>
+      <div style={{ width: 30, height: 30, borderRadius: 15, background: `${color}22`, color, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, fontSize: 13, flexShrink: 0 }}>{rank}</div>
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <div style={{ fontWeight: 800, fontSize: 14 }}>{name}</div>
+        <div style={{ color: C.textSub, fontSize: 12, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{sub}</div>
+      </div>
+      <div style={{ textAlign: "right", flexShrink: 0 }}>
+        <div style={{ color, fontWeight: 900, fontSize: 15 }}>{value}</div>
+        <div style={{ color: C.textSub, fontSize: 11 }}>{rate}</div>
       </div>
     </div>
   );
 }
 
 // ─── 设置面板 ─────────────────────────────────────────────────────
-function SettingsPanel({ settings, onUpdate, showToast }) {
+function SettingsPanel({ settings, onUpdate, showToast, onExport, onImport }) {
   const [newCard, setNewCard] = useState("");
   const [newTeam, setNewTeam] = useState("");
   const [newMember, setNewMember] = useState({});
@@ -704,6 +1092,16 @@ function SettingsPanel({ settings, onUpdate, showToast }) {
   return (
     <div>
       <div style={{ fontWeight: 700, fontSize: 16, marginBottom: 14 }}>⚙️ 系统设置</div>
+
+      <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, marginBottom: 14 }}>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>📦 数据备份</div>
+        <div style={{ color: C.textSub, fontSize: 13, lineHeight: 1.7, marginBottom: 12 }}>可以把云端数据导出到本地文件，也可以从本地备份文件导入并覆盖云端数据。</div>
+        <input id="jb-import-file" type="file" accept="application/json,.json" onChange={onImport} style={{ display: "none" }} />
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn onClick={onExport} style={{ flex: 1 }}>导出到本地</Btn>
+          <Btn outline color={C.primary} onClick={() => document.getElementById("jb-import-file")?.click()} style={{ flex: 1 }}>本地导入</Btn>
+        </div>
+      </div>
 
       {/* 会员卡类型 */}
       <div style={{ background: "rgba(255,255,255,0.96)", borderRadius: 22, padding: 18, boxShadow: C.shadow, border: `1.5px solid ${C.border}`, marginBottom: 14 }}>
