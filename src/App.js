@@ -150,6 +150,171 @@ const buildTeamStats = (list, teams, allStaff) => {
     return { ...t, total: teamCustomers.length, won, wonT, todayTotal: todayCustomers.length };
   }).sort((a, b) => b.won - a.won || b.total - a.total);
 };
+const buildDailyReportText = (dailyRank, totalDeals, totalEntries) => {
+  const ranked = dailyRank.filter(s => s.wonT > 0 || s.todayTotal > 0);
+  const rows = ranked.length ? ranked : dailyRank.slice(0, 6);
+  return [
+    "京贝儿童门诊会员营销系统",
+    `${today()} 今日喜报`,
+    "",
+    `今日成交：${creditText(totalDeals)} 单`,
+    `今日录入：${totalEntries} 位`,
+    "",
+    "个人业绩排名",
+    ...rows.map((s, i) => `${["🥇", "🥈", "🥉"][i] || `${i + 1}.`} ${s.name}｜成交 ${creditText(s.wonT)} 单｜录入 ${s.todayTotal} 位｜成交率 ${pctText(s.wonT, s.todayTotal)}`),
+    "",
+    "两人合作成交时，每人按 0.5 单计入。",
+  ].join("\n");
+};
+const drawRoundRect = (ctx, x, y, w, h, r) => {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+};
+const fitText = (ctx, text, x, y, maxWidth, font) => {
+  ctx.font = font;
+  let value = String(text);
+  while (ctx.measureText(value).width > maxWidth && value.length > 2) value = `${value.slice(0, -2)}…`;
+  ctx.fillText(value, x, y);
+};
+const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries }) => new Promise((resolve, reject) => {
+  const scale = 2;
+  const width = 900;
+  const height = 1220;
+  const canvas = document.createElement("canvas");
+  canvas.width = width * scale;
+  canvas.height = height * scale;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) {
+    reject(new Error("无法生成图片"));
+    return;
+  }
+  ctx.scale(scale, scale);
+
+  const bg = ctx.createLinearGradient(0, 0, width, height);
+  bg.addColorStop(0, "#FFF5A8");
+  bg.addColorStop(0.42, "#FFD4E4");
+  bg.addColorStop(1, "#BEEBFF");
+  ctx.fillStyle = bg;
+  ctx.fillRect(0, 0, width, height);
+
+  for (let i = 0; i < 42; i += 1) {
+    ctx.save();
+    ctx.translate((i * 73) % width, 40 + ((i * 97) % 1020));
+    ctx.rotate((i * 31 * Math.PI) / 180);
+    ctx.fillStyle = [C.accent, C.primary, C.success, C.warn, C.purple][i % 5];
+    ctx.globalAlpha = 0.34;
+    drawRoundRect(ctx, -7, -12, 14, 24, 4);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  drawRoundRect(ctx, 42, 42, width - 84, height - 84, 34);
+  ctx.fillStyle = "rgba(255,255,255,.82)";
+  ctx.fill();
+  ctx.strokeStyle = "rgba(255,255,255,.9)";
+  ctx.lineWidth = 3;
+  ctx.stroke();
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = C.text;
+  ctx.font = "900 42px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("京贝儿童门诊会员营销系统", width / 2, 122);
+  ctx.fillStyle = C.accent;
+  ctx.font = "900 66px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("今日喜报", width / 2, 208);
+  ctx.fillStyle = C.textSub;
+  ctx.font = "600 26px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText(today(), width / 2, 252);
+
+  const statCards = [
+    ["今日成交", `${creditText(totalDeals)} 单`, C.accent],
+    ["今日录入", `${totalEntries} 位`, C.primary],
+    ["继续加油", "冲刺中", C.success],
+  ];
+  statCards.forEach(([label, value, color], i) => {
+    const x = 92 + i * 238;
+    drawRoundRect(ctx, x, 304, 202, 122, 24);
+    ctx.fillStyle = "rgba(255,255,255,.76)";
+    ctx.fill();
+    ctx.fillStyle = color;
+    ctx.font = "900 36px PingFang SC, Microsoft YaHei, sans-serif";
+    ctx.fillText(value, x + 101, 354);
+    ctx.fillStyle = C.textSub;
+    ctx.font = "600 22px PingFang SC, Microsoft YaHei, sans-serif";
+    ctx.fillText(label, x + 101, 394);
+  });
+
+  const top = dailyRank.slice(0, 3);
+  const podium = [
+    { x: 318, y: 472, w: 264, h: 214, title: "🥇", color: "#FF7A9C" },
+    { x: 82, y: 520, w: 226, h: 166, title: "🥈", color: "#5BA7FF" },
+    { x: 592, y: 536, w: 226, h: 150, title: "🥉", color: "#FF9F43" },
+  ];
+  podium.forEach((p, i) => {
+    const s = top[i] || { name: "-", teamName: "", wonT: 0, todayTotal: 0 };
+    const cardBg = ctx.createLinearGradient(p.x, p.y, p.x + p.w, p.y + p.h);
+    cardBg.addColorStop(0, i === 0 ? "#FFE27A" : i === 1 ? "#DCE8FF" : "#FFDDB8");
+    cardBg.addColorStop(1, "rgba(255,255,255,.92)");
+    drawRoundRect(ctx, p.x, p.y, p.w, p.h, 28);
+    ctx.fillStyle = cardBg;
+    ctx.fill();
+    ctx.fillStyle = p.color;
+    ctx.font = `${i === 0 ? "48" : "38"}px PingFang SC, Microsoft YaHei, sans-serif`;
+    ctx.fillText(p.title, p.x + p.w / 2, p.y + (i === 0 ? 58 : 50));
+    ctx.fillStyle = C.text;
+    ctx.font = `900 ${i === 0 ? "34" : "29"}px PingFang SC, Microsoft YaHei, sans-serif`;
+    fitText(ctx, s.name, p.x + p.w / 2, p.y + (i === 0 ? 105 : 92), p.w - 32, ctx.font);
+    ctx.fillStyle = p.color;
+    ctx.font = `900 ${i === 0 ? "42" : "34"}px PingFang SC, Microsoft YaHei, sans-serif`;
+    ctx.fillText(`${creditText(s.wonT)} 单`, p.x + p.w / 2, p.y + (i === 0 ? 158 : 135));
+    ctx.fillStyle = C.textSub;
+    ctx.font = "600 20px PingFang SC, Microsoft YaHei, sans-serif";
+    ctx.fillText(`成交率 ${pctText(s.wonT, s.todayTotal)}`, p.x + p.w / 2, p.y + (i === 0 ? 190 : 160));
+  });
+
+  ctx.textAlign = "left";
+  ctx.fillStyle = C.text;
+  ctx.font = "900 28px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("完整排名", 92, 748);
+
+  const rows = dailyRank.slice(0, 8);
+  rows.forEach((s, i) => {
+    const y = 792 + i * 48;
+    drawRoundRect(ctx, 92, y - 30, 716, 38, 18);
+    ctx.fillStyle = "rgba(255,255,255,.62)";
+    ctx.fill();
+    ctx.fillStyle = [C.warn, C.primary, C.success, C.purple, C.accent][i % 5];
+    ctx.font = "900 22px PingFang SC, Microsoft YaHei, sans-serif";
+    ctx.fillText(`${i + 1}`, 114, y - 4);
+    ctx.fillStyle = C.text;
+    ctx.font = "800 22px PingFang SC, Microsoft YaHei, sans-serif";
+    fitText(ctx, s.name, 154, y - 4, 160, ctx.font);
+    ctx.fillStyle = C.textSub;
+    ctx.font = "600 18px PingFang SC, Microsoft YaHei, sans-serif";
+    fitText(ctx, s.teamName, 306, y - 4, 120, ctx.font);
+    ctx.fillStyle = C.primaryDark;
+    ctx.font = "900 22px PingFang SC, Microsoft YaHei, sans-serif";
+    ctx.fillText(`成交 ${creditText(s.wonT)} 单`, 456, y - 4);
+    ctx.fillStyle = C.textSub;
+    ctx.font = "600 18px PingFang SC, Microsoft YaHei, sans-serif";
+    ctx.fillText(`成交率 ${pctText(s.wonT, s.todayTotal)}`, 620, y - 4);
+  });
+
+  ctx.textAlign = "center";
+  ctx.fillStyle = C.textSub;
+  ctx.font = "600 20px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("两人合作成交时，每人按 0.5 单计入", width / 2, 1150);
+
+  canvas.toBlob(blob => {
+    if (blob) resolve(blob);
+    else reject(new Error("无法生成图片"));
+  }, "image/png");
+});
 
 // ─── 工具组件 ──────────────────────────────────────────────────────
 function Badge({ status }) {
@@ -569,6 +734,7 @@ export default function App() {
             historySummary={historySummary}
             historyRange={historyRange}
             setHistoryRange={setHistoryRange}
+            showToast={showToast}
             C={C}
           />
         )}
@@ -885,7 +1051,7 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
 }
 
 // ─── 统计面板 ─────────────────────────────────────────────────────
-function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, historyRange, setHistoryRange }) {
+function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, historyRange, setHistoryRange, showToast }) {
   const medal = (i) => ["🥇", "🥈", "🥉"][i] || `${i + 1}`;
   const maxWon = Math.max(1, ...teamStats.map(t => t.won));
   const dailyRank = [...staffStats].sort((a, b) => b.wonT - a.wonT || b.todayTotal - a.todayTotal || a.name.localeCompare(b.name, "zh-CN"));
@@ -893,11 +1059,37 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
   const restDaily = dailyRank.slice(3);
   const maxHistoryWon = Math.max(1, ...historyStaffStats.map(s => s.won));
   const totalCredit = historyStaffStats.reduce((sum, s) => sum + s.won, 0);
+  const todayDeals = staffStats.reduce((sum, s) => sum + s.wonT, 0);
+  const todayEntries = staffStats.reduce((sum, s) => sum + s.todayTotal, 0);
 
   const quickRange = (type) => {
     if (type === "today") setHistoryRange({ start: today(), end: today() });
     if (type === "week") setHistoryRange({ start: daysAgo(6), end: today() });
     if (type === "month") setHistoryRange({ start: monthStart(), end: today() });
+  };
+  const copyDailyReport = async () => {
+    const text = buildDailyReportText(dailyRank, todayDeals, todayEntries);
+    try {
+      if (navigator.clipboard && window.ClipboardItem) {
+        const image = await createDailyReportImage({ dailyRank, totalDeals: todayDeals, totalEntries: todayEntries });
+        await navigator.clipboard.write([
+          new window.ClipboardItem({
+            "image/png": image,
+            "text/plain": new Blob([text], { type: "text/plain" }),
+          }),
+        ]);
+        showToast("success", "已复制喜报图，去微信粘贴发送");
+        return;
+      }
+      throw new Error("当前浏览器不支持图片复制");
+    } catch {
+      try {
+        await navigator.clipboard.writeText(text);
+        showToast("success", "已复制喜报文字，去微信粘贴发送");
+      } catch {
+        showToast("error", "复制失败，请换浏览器或手动截图");
+      }
+    }
   };
 
   return (
@@ -913,7 +1105,10 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
           50% { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(255, 122, 156, .32); }
         }
       `}</style>
-      <div style={{ fontWeight: 900, fontSize: 18, marginBottom: 14 }}>今日喜报</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
+        <div style={{ fontWeight: 900, fontSize: 18 }}>今日喜报</div>
+        <Btn small color={C.accent} onClick={copyDailyReport}>复制到微信</Btn>
+      </div>
 
       <div style={{ position: "relative", overflow: "hidden", background: "linear-gradient(135deg, rgba(255,246,166,.92), rgba(255,210,228,.9) 48%, rgba(189,235,255,.92))", borderRadius: 24, padding: 18, boxShadow: C.shadowMd, border: "1.5px solid rgba(255,255,255,.78)", marginBottom: 14 }}>
         {Array.from({ length: 18 }).map((_, i) => (
@@ -931,8 +1126,8 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
         ))}
         <div style={{ position: "relative", zIndex: 1 }}>
           <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 8, marginBottom: 14 }}>
-            <MiniStat label="今日成交" value={`${creditText(staffStats.reduce((sum, s) => sum + s.wonT, 0))} 单`} color={C.accent} />
-            <MiniStat label="今日录入" value={`${staffStats.reduce((sum, s) => sum + s.todayTotal, 0)} 位`} color={C.primary} />
+            <MiniStat label="今日成交" value={`${creditText(todayDeals)} 单`} color={C.accent} />
+            <MiniStat label="今日录入" value={`${todayEntries} 位`} color={C.primary} />
             <MiniStat label="跟进加油" value="继续冲" color={C.success} />
           </div>
 
