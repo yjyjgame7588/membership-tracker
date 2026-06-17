@@ -150,20 +150,21 @@ const buildTeamStats = (list, teams, allStaff) => {
     return { ...t, total: teamCustomers.length, won, wonT, todayTotal: todayCustomers.length };
   }).sort((a, b) => b.won - a.won || b.total - a.total);
 };
-const buildDailyReportText = (dailyRank, totalDeals, totalEntries) => {
+const buildDailyReportText = (dailyRank, totalDeals, totalEntries, leadingTeam) => {
   const ranked = dailyRank.filter(s => s.wonT > 0 || s.todayTotal > 0);
   const rows = ranked.length ? ranked : dailyRank.slice(0, 6);
   return [
-    "京贝儿童门诊会员营销系统",
     `${today()} 今日喜报`,
+    "🎉🎉🎉 礼花撒起来，烟花放起来 🎆🎆🎆",
     "",
     `今日成交：${creditText(totalDeals)} 单`,
     `今日录入：${totalEntries} 位`,
     "",
-    "个人业绩排名",
+    "今日个人业绩排名",
     ...rows.map((s, i) => `${["🥇", "🥈", "🥉"][i] || `${i + 1}.`} ${s.name}｜成交 ${creditText(s.wonT)} 单｜录入 ${s.todayTotal} 位｜成交率 ${pctText(s.wonT, s.todayTotal)}`),
     "",
-    "两人合作成交时，每人按 0.5 单计入。",
+    `${leadingTeam?.name || "团队"}目前领先。`,
+    "🎊 继续冲刺，明天再创佳绩！",
   ].join("\n");
 };
 const drawRoundRect = (ctx, x, y, w, h, r) => {
@@ -181,7 +182,25 @@ const fitText = (ctx, text, x, y, maxWidth, font) => {
   while (ctx.measureText(value).width > maxWidth && value.length > 2) value = `${value.slice(0, -2)}…`;
   ctx.fillText(value, x, y);
 };
-const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries }) => new Promise((resolve, reject) => {
+const drawFirework = (ctx, x, y, radius, color) => {
+  ctx.save();
+  ctx.strokeStyle = color;
+  ctx.lineWidth = 4;
+  ctx.globalAlpha = 0.7;
+  for (let i = 0; i < 14; i += 1) {
+    const angle = (Math.PI * 2 * i) / 14;
+    ctx.beginPath();
+    ctx.moveTo(x + Math.cos(angle) * radius * 0.28, y + Math.sin(angle) * radius * 0.28);
+    ctx.lineTo(x + Math.cos(angle) * radius, y + Math.sin(angle) * radius);
+    ctx.stroke();
+  }
+  ctx.fillStyle = color;
+  ctx.beginPath();
+  ctx.arc(x, y, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+};
+const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries, leadingTeam }) => new Promise((resolve, reject) => {
   const scale = 2;
   const width = 900;
   const height = 1220;
@@ -201,6 +220,9 @@ const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries }) => new 
   bg.addColorStop(1, "#BEEBFF");
   ctx.fillStyle = bg;
   ctx.fillRect(0, 0, width, height);
+  drawFirework(ctx, 116, 132, 54, C.accent);
+  drawFirework(ctx, 782, 154, 62, C.primary);
+  drawFirework(ctx, 726, 1032, 46, C.warn);
 
   for (let i = 0; i < 42; i += 1) {
     ctx.save();
@@ -230,6 +252,9 @@ const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries }) => new 
   ctx.fillStyle = C.textSub;
   ctx.font = "600 26px PingFang SC, Microsoft YaHei, sans-serif";
   ctx.fillText(today(), width / 2, 252);
+  ctx.fillStyle = C.warn;
+  ctx.font = "900 24px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("礼花撒起来  烟花放起来", width / 2, 286);
 
   const statCards = [
     ["今日成交", `${creditText(totalDeals)} 单`, C.accent],
@@ -306,9 +331,15 @@ const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries }) => new 
   });
 
   ctx.textAlign = "center";
+  drawRoundRect(ctx, 128, 1100, 644, 56, 28);
+  ctx.fillStyle = "rgba(255,255,255,.72)";
+  ctx.fill();
+  ctx.fillStyle = C.accent;
+  ctx.font = "900 26px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText(`${leadingTeam?.name || "团队"}目前领先`, width / 2, 1136);
   ctx.fillStyle = C.textSub;
-  ctx.font = "600 20px PingFang SC, Microsoft YaHei, sans-serif";
-  ctx.fillText("两人合作成交时，每人按 0.5 单计入", width / 2, 1150);
+  ctx.font = "600 18px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("两人合作成交时，每人按 0.5 单计入", width / 2, 1178);
 
   canvas.toBlob(blob => {
     if (blob) resolve(blob);
@@ -1061,6 +1092,7 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
   const totalCredit = historyStaffStats.reduce((sum, s) => sum + s.won, 0);
   const todayDeals = staffStats.reduce((sum, s) => sum + s.wonT, 0);
   const todayEntries = staffStats.reduce((sum, s) => sum + s.todayTotal, 0);
+  const leadingTeam = [...teamStats].sort((a, b) => b.wonT - a.wonT || b.todayTotal - a.todayTotal || b.won - a.won)[0];
 
   const quickRange = (type) => {
     if (type === "today") setHistoryRange({ start: today(), end: today() });
@@ -1068,10 +1100,10 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
     if (type === "month") setHistoryRange({ start: monthStart(), end: today() });
   };
   const copyDailyReport = async () => {
-    const text = buildDailyReportText(dailyRank, todayDeals, todayEntries);
+    const text = buildDailyReportText(dailyRank, todayDeals, todayEntries, leadingTeam);
     try {
       if (navigator.clipboard && window.ClipboardItem) {
-        const image = await createDailyReportImage({ dailyRank, totalDeals: todayDeals, totalEntries: todayEntries });
+        const image = await createDailyReportImage({ dailyRank, totalDeals: todayDeals, totalEntries: todayEntries, leadingTeam });
         await navigator.clipboard.write([
           new window.ClipboardItem({
             "image/png": image,
@@ -1104,6 +1136,10 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
           0%, 100% { transform: translateY(0); box-shadow: 0 12px 30px rgba(255, 184, 77, .28); }
           50% { transform: translateY(-3px); box-shadow: 0 18px 40px rgba(255, 122, 156, .32); }
         }
+        @keyframes jbFirework {
+          0%, 100% { transform: scale(.76); opacity: .25; }
+          45% { transform: scale(1.12); opacity: .72; }
+        }
       `}</style>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 10, marginBottom: 14 }}>
         <div style={{ fontWeight: 900, fontSize: 18 }}>今日喜报</div>
@@ -1122,6 +1158,24 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
             background: [C.accent, C.primary, C.success, C.warn, C.purple][i % 5],
             opacity: 0.55,
             animation: `jbConfettiFall ${3.2 + (i % 5) * 0.55}s linear ${i * 0.17}s infinite`,
+          }} />
+        ))}
+        {[
+          { left: "11%", top: "12%", color: C.accent },
+          { left: "86%", top: "16%", color: C.primary },
+          { left: "78%", top: "78%", color: C.warn },
+        ].map((item, i) => (
+          <span key={`fw-${i}`} style={{
+            position: "absolute",
+            left: item.left,
+            top: item.top,
+            width: 68,
+            height: 68,
+            borderRadius: 999,
+            background: `radial-gradient(circle, ${item.color} 0 5%, transparent 6% 100%)`,
+            boxShadow: `0 -26px 0 -24px ${item.color}, 0 26px 0 -24px ${item.color}, 26px 0 0 -24px ${item.color}, -26px 0 0 -24px ${item.color}, 18px 18px 0 -24px ${item.color}, -18px -18px 0 -24px ${item.color}, -18px 18px 0 -24px ${item.color}, 18px -18px 0 -24px ${item.color}`,
+            animation: `jbFirework ${1.8 + i * 0.35}s ease-in-out ${i * 0.2}s infinite`,
+            opacity: 0.6,
           }} />
         ))}
         <div style={{ position: "relative", zIndex: 1 }}>
