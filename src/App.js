@@ -155,7 +155,7 @@ const buildDailyReportText = (dailyRank, totalDeals, totalEntries, leadingTeam) 
   const rows = ranked.length ? ranked : dailyRank.slice(0, 6);
   return [
     `${today()} 今日喜报`,
-    "🎉🎉🎉 礼花撒起来，烟花放起来 🎆🎆🎆",
+    "[烟花][庆祝]",
     "",
     `今日成交：${creditText(totalDeals)} 单`,
     `今日录入：${totalEntries} 位`,
@@ -164,7 +164,7 @@ const buildDailyReportText = (dailyRank, totalDeals, totalEntries, leadingTeam) 
     ...rows.map((s, i) => `${["🥇", "🥈", "🥉"][i] || `${i + 1}.`} ${s.name}｜成交 ${creditText(s.wonT)} 单｜录入 ${s.todayTotal} 位｜成交率 ${pctText(s.wonT, s.todayTotal)}`),
     "",
     `${leadingTeam?.name || "团队"}目前领先。`,
-    "🎊 继续冲刺，明天再创佳绩！",
+    "恭喜他们，继续加油[加油]！祝再创佳绩！",
   ].join("\n");
 };
 const drawRoundRect = (ctx, x, y, w, h, r) => {
