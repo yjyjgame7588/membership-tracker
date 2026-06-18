@@ -150,11 +150,12 @@ const buildTeamStats = (list, teams, allStaff) => {
     return { ...t, total: teamCustomers.length, won, wonT, todayTotal: todayCustomers.length };
   }).sort((a, b) => b.won - a.won || b.total - a.total);
 };
-const buildDailyReportText = (dailyRank, totalDeals, totalEntries, leadingTeam) => {
+const buildDailyReportText = (dailyRank, totalDeals, totalEntries, leadingTeam, celebratedTeams) => {
   const ranked = dailyRank.filter(s => s.wonT > 0 || s.todayTotal > 0);
   const rows = ranked.length ? ranked : dailyRank.slice(0, 6);
+  const teamNames = celebratedTeams.length ? celebratedTeams.map(t => t.name).join("、") : "各团队";
   return [
-    `${today()} 今日喜报`,
+    `${today()} 今日开卡喜报[爆竹][爆竹][爆竹]`,
     "[烟花][庆祝]",
     "",
     `今日成交：${creditText(totalDeals)} 单`,
@@ -163,8 +164,8 @@ const buildDailyReportText = (dailyRank, totalDeals, totalEntries, leadingTeam) 
     "今日个人业绩排名",
     ...rows.map((s, i) => `${["🥇", "🥈", "🥉"][i] || `${i + 1}.`} ${s.name}｜成交 ${creditText(s.wonT)} 单｜录入 ${s.todayTotal} 位｜成交率 ${pctText(s.wonT, s.todayTotal)}`),
     "",
-    `${leadingTeam?.name || "团队"}目前领先。`,
-    "恭喜他们，继续加油[加油]！祝再创佳绩！",
+    `恭喜${teamNames}，目前${leadingTeam?.name || "团队"}领先。`,
+    "再次祝贺！希望你在未来日子里发光发热🧚‍♀️🧚‍♀️🧚‍♀️🧚‍♀️",
   ].join("\n");
 };
 const drawRoundRect = (ctx, x, y, w, h, r) => {
@@ -177,6 +178,12 @@ const drawRoundRect = (ctx, x, y, w, h, r) => {
   ctx.closePath();
 };
 const fitText = (ctx, text, x, y, maxWidth, font) => {
+  ctx.font = font;
+  let value = String(text);
+  while (ctx.measureText(value).width > maxWidth && value.length > 2) value = `${value.slice(0, -2)}…`;
+  ctx.fillText(value, x, y);
+};
+const fitCenterText = (ctx, text, x, y, maxWidth, font) => {
   ctx.font = font;
   let value = String(text);
   while (ctx.measureText(value).width > maxWidth && value.length > 2) value = `${value.slice(0, -2)}…`;
@@ -200,7 +207,7 @@ const drawFirework = (ctx, x, y, radius, color) => {
   ctx.fill();
   ctx.restore();
 };
-const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries, leadingTeam }) => new Promise((resolve, reject) => {
+const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries, leadingTeam, celebratedTeams }) => new Promise((resolve, reject) => {
   const scale = 2;
   const width = 900;
   const height = 1220;
@@ -247,8 +254,8 @@ const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries, leadingTe
   ctx.font = "900 42px PingFang SC, Microsoft YaHei, sans-serif";
   ctx.fillText("京贝儿童门诊会员营销系统", width / 2, 122);
   ctx.fillStyle = C.accent;
-  ctx.font = "900 66px PingFang SC, Microsoft YaHei, sans-serif";
-  ctx.fillText("今日喜报", width / 2, 208);
+  ctx.font = "900 58px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("今日开卡喜报", width / 2, 205);
   ctx.fillStyle = C.textSub;
   ctx.font = "600 26px PingFang SC, Microsoft YaHei, sans-serif";
   ctx.fillText(today(), width / 2, 252);
@@ -276,9 +283,9 @@ const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries, leadingTe
 
   const top = dailyRank.slice(0, 3);
   const podium = [
-    { x: 318, y: 472, w: 264, h: 214, title: "🥇", color: "#FF7A9C" },
-    { x: 82, y: 520, w: 226, h: 166, title: "🥈", color: "#5BA7FF" },
-    { x: 592, y: 536, w: 226, h: 150, title: "🥉", color: "#FF9F43" },
+    { x: 318, y: 472, w: 264, h: 214, title: "🥇", color: "#FF7A9C", medalSize: 68 },
+    { x: 82, y: 520, w: 226, h: 166, title: "🥈", color: "#5BA7FF", medalSize: 56 },
+    { x: 592, y: 536, w: 226, h: 150, title: "🥉", color: "#FF9F43", medalSize: 54 },
   ];
   podium.forEach((p, i) => {
     const s = top[i] || { name: "-", teamName: "", wonT: 0, todayTotal: 0 };
@@ -289,11 +296,11 @@ const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries, leadingTe
     ctx.fillStyle = cardBg;
     ctx.fill();
     ctx.fillStyle = p.color;
-    ctx.font = `${i === 0 ? "48" : "38"}px PingFang SC, Microsoft YaHei, sans-serif`;
-    ctx.fillText(p.title, p.x + p.w / 2, p.y + (i === 0 ? 58 : 50));
+    ctx.font = `${p.medalSize}px PingFang SC, Microsoft YaHei, sans-serif`;
+    ctx.fillText(p.title, p.x + p.w / 2, p.y + (i === 0 ? 72 : 58));
     ctx.fillStyle = C.text;
     ctx.font = `900 ${i === 0 ? "34" : "29"}px PingFang SC, Microsoft YaHei, sans-serif`;
-    fitText(ctx, s.name, p.x + p.w / 2, p.y + (i === 0 ? 105 : 92), p.w - 32, ctx.font);
+    fitText(ctx, s.name, p.x + p.w / 2, p.y + (i === 0 ? 116 : 98), p.w - 32, ctx.font);
     ctx.fillStyle = p.color;
     ctx.font = `900 ${i === 0 ? "42" : "34"}px PingFang SC, Microsoft YaHei, sans-serif`;
     ctx.fillText(`${creditText(s.wonT)} 单`, p.x + p.w / 2, p.y + (i === 0 ? 158 : 135));
@@ -331,15 +338,16 @@ const createDailyReportImage = ({ dailyRank, totalDeals, totalEntries, leadingTe
   });
 
   ctx.textAlign = "center";
+  const teamNames = (celebratedTeams || []).length ? celebratedTeams.map(t => t.name).join("、") : "各团队";
   drawRoundRect(ctx, 128, 1100, 644, 56, 28);
   ctx.fillStyle = "rgba(255,255,255,.72)";
   ctx.fill();
   ctx.fillStyle = C.accent;
-  ctx.font = "900 26px PingFang SC, Microsoft YaHei, sans-serif";
-  ctx.fillText(`${leadingTeam?.name || "团队"}目前领先`, width / 2, 1136);
+  ctx.font = "900 22px PingFang SC, Microsoft YaHei, sans-serif";
+  fitCenterText(ctx, `恭喜${teamNames}，目前${leadingTeam?.name || "团队"}领先`, width / 2, 1135, 590, ctx.font);
   ctx.fillStyle = C.textSub;
-  ctx.font = "600 18px PingFang SC, Microsoft YaHei, sans-serif";
-  ctx.fillText("两人合作成交时，每人按 0.5 单计入", width / 2, 1178);
+  ctx.font = "600 17px PingFang SC, Microsoft YaHei, sans-serif";
+  ctx.fillText("再次祝贺！希望大家继续发光发热", width / 2, 1178);
 
   canvas.toBlob(blob => {
     if (blob) resolve(blob);
@@ -1093,6 +1101,7 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
   const todayDeals = staffStats.reduce((sum, s) => sum + s.wonT, 0);
   const todayEntries = staffStats.reduce((sum, s) => sum + s.todayTotal, 0);
   const leadingTeam = [...teamStats].sort((a, b) => b.wonT - a.wonT || b.todayTotal - a.todayTotal || b.won - a.won)[0];
+  const celebratedTeams = teamStats.filter(t => t.wonT > 0 || t.todayTotal > 0);
 
   const quickRange = (type) => {
     if (type === "today") setHistoryRange({ start: today(), end: today() });
@@ -1100,10 +1109,10 @@ function StatsPanel({ teamStats, staffStats, historyStaffStats, historySummary, 
     if (type === "month") setHistoryRange({ start: monthStart(), end: today() });
   };
   const copyDailyReport = async () => {
-    const text = buildDailyReportText(dailyRank, todayDeals, todayEntries, leadingTeam);
+    const text = buildDailyReportText(dailyRank, todayDeals, todayEntries, leadingTeam, celebratedTeams);
     try {
       if (navigator.clipboard && window.ClipboardItem) {
-        const image = await createDailyReportImage({ dailyRank, totalDeals: todayDeals, totalEntries: todayEntries, leadingTeam });
+        const image = await createDailyReportImage({ dailyRank, totalDeals: todayDeals, totalEntries: todayEntries, leadingTeam, celebratedTeams });
         await navigator.clipboard.write([
           new window.ClipboardItem({
             "image/png": image,
