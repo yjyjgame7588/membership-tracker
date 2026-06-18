@@ -413,13 +413,66 @@ function Input({ label, ...props }) {
   );
 }
 
-function Btn({ children, onClick, color = C.primary, outline, style, small }) {
+function Btn({ children, onClick, color = C.primary, outline, style, small, type = "button" }) {
   return (
-    <button onClick={onClick} style={{
+    <button type={type} onClick={onClick} style={{
       padding: small ? "6px 14px" : "11px 20px", borderRadius: 14, border: outline ? `1.5px solid ${color}` : "none",
       background: outline ? "#fff" : color, color: outline ? color : "#fff",
       fontSize: small ? 13 : 15, fontWeight: 700, cursor: "pointer", boxShadow: outline ? "none" : "0 8px 18px rgba(91,167,255,.22)", ...(style || {})
     }}>{children}</button>
+  );
+}
+
+function PasswordModal({ reason, onSubmit, onCancel }) {
+  const [password, setPassword] = useState("");
+  const [error, setError] = useState("");
+  const submit = () => {
+    if (!password.trim()) {
+      setError("请输入管理员密码");
+      return;
+    }
+    onSubmit(password.trim());
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(38,50,71,0.42)", zIndex: 700, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ width: "100%", maxWidth: 360, background: "#fff", borderRadius: 24, padding: 22, boxShadow: C.shadowMd, border: `1.5px solid ${C.border}` }}>
+        <div style={{ fontSize: 34, textAlign: "center", marginBottom: 8 }}>🔐</div>
+        <div style={{ textAlign: "center", fontWeight: 900, fontSize: 18, marginBottom: 6 }}>管理员验证</div>
+        <div style={{ textAlign: "center", color: C.textSub, fontSize: 13, lineHeight: 1.6, marginBottom: 16 }}>{reason}</div>
+        <input
+          autoFocus
+          type="password"
+          inputMode="numeric"
+          value={password}
+          onChange={e => { setPassword(e.target.value); setError(""); }}
+          onKeyDown={e => e.key === "Enter" && submit()}
+          placeholder="请输入密码"
+          style={{ width: "100%", padding: "13px 14px", borderRadius: 15, border: `1.5px solid ${error ? C.accent : C.border}`, fontSize: 16, outline: "none", boxSizing: "border-box", textAlign: "center" }}
+        />
+        {error && <div style={{ color: C.accent, fontSize: 13, marginTop: 8, textAlign: "center", fontWeight: 700 }}>{error}</div>}
+        <div style={{ display: "flex", gap: 10, marginTop: 18 }}>
+          <Btn outline color={C.border} onClick={onCancel} style={{ flex: 1, color: C.text }}>取消</Btn>
+          <Btn color={C.primary} onClick={submit} style={{ flex: 1 }}>确认</Btn>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function ConfirmModal({ title = "确认操作", message, confirmText = "确认", onConfirm, onCancel }) {
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "rgba(38,50,71,0.42)", zIndex: 690, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ width: "100%", maxWidth: 360, background: "#fff", borderRadius: 24, padding: 22, boxShadow: C.shadowMd, border: `1.5px solid ${C.border}` }}>
+        <div style={{ fontSize: 34, textAlign: "center", marginBottom: 8 }}>⚠️</div>
+        <div style={{ textAlign: "center", fontWeight: 900, fontSize: 18, marginBottom: 8 }}>{title}</div>
+        <div style={{ textAlign: "center", color: C.textSub, fontSize: 13, lineHeight: 1.7, marginBottom: 18, whiteSpace: "pre-line" }}>{message}</div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Btn outline color={C.border} onClick={onCancel} style={{ flex: 1, color: C.text }}>取消</Btn>
+          <Btn color={C.accent} onClick={onConfirm} style={{ flex: 1 }}>{confirmText}</Btn>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -437,6 +490,8 @@ export default function App() {
   const [searchQ, setSearchQ] = useState("");
   const [pendingForm, setPendingForm] = useState(null);
   const [historyRange, setHistoryRange] = useState({ start: monthStart(), end: today() });
+  const [passwordPrompt, setPasswordPrompt] = useState(null);
+  const [confirmPrompt, setConfirmPrompt] = useState(null);
 
   // 表单
   const blankForm = () => ({ name: "", phone: "", staff: "", teamId: "", date: today(), card: settings.cardTypes[0] || "", status: "pending", failReason: "", followNote: "", followStaff: "", contributors: [] });
@@ -483,9 +538,22 @@ export default function App() {
     setTimeout(() => setToast(null), 2800);
   };
   const requestAdminPassword = (reason = "该操作需要管理员密码") => {
-    const password = window.prompt(`${reason}\n请输入管理员密码：`);
-    if (password === null) return null;
-    return password;
+    return new Promise(resolve => {
+      setPasswordPrompt({ reason, resolve });
+    });
+  };
+  const resolveAdminPassword = (password) => {
+    if (passwordPrompt?.resolve) passwordPrompt.resolve(password);
+    setPasswordPrompt(null);
+  };
+  const requestConfirm = ({ title, message, confirmText = "确认" }) => {
+    return new Promise(resolve => {
+      setConfirmPrompt({ title, message, confirmText, resolve });
+    });
+  };
+  const resolveConfirm = (confirmed) => {
+    if (confirmPrompt?.resolve) confirmPrompt.resolve(confirmed);
+    setConfirmPrompt(null);
   };
 
   const exportData = () => {
@@ -519,9 +587,13 @@ export default function App() {
       const incomingCustomers = Array.isArray(data.customers) ? data.customers.map(normalizeCustomer).filter(c => c.name && c.phone) : null;
       const incomingSettings = data.settings && Array.isArray(data.settings.teams) && Array.isArray(data.settings.cardTypes) ? data.settings : null;
       if (!incomingCustomers || !incomingSettings) throw new Error("文件格式不正确");
-      const okReplace = window.confirm(`确认导入这份本地备份吗？\n\n将替换当前云端数据：${incomingCustomers.length} 位顾客记录。`);
+      const okReplace = await requestConfirm({
+        title: "导入本地备份",
+        message: `确认导入这份本地备份吗？\n\n将替换当前云端数据：${incomingCustomers.length} 位顾客记录。`,
+        confirmText: "确认导入",
+      });
       if (!okReplace) return;
-      const adminPassword = requestAdminPassword("导入会覆盖云端数据");
+      const adminPassword = await requestAdminPassword("导入会覆盖云端数据");
       if (!adminPassword) return;
 
       await api("replaceAll", { customers: incomingCustomers, settings: incomingSettings, adminPassword });
@@ -580,7 +652,7 @@ export default function App() {
     const newC = normalizeCustomer({ id: Date.now(), ...form, name: cleanName, phone: cleanPhone });
     let adminPassword = "";
     if (newC.date !== today()) {
-      adminPassword = requestAdminPassword("历史数据录入需要管理员密码");
+      adminPassword = await requestAdminPassword("历史数据录入需要管理员密码");
       if (!adminPassword) return;
     }
 
@@ -602,7 +674,7 @@ export default function App() {
     const newC = normalizeCustomer({ id: Date.now(), ...pendingForm, name: pendingForm.name.trim(), phone: pendingForm.phone.trim() });
     let adminPassword = pendingForm.adminPassword || "";
     if (newC.date !== today() && !adminPassword) {
-      adminPassword = requestAdminPassword("历史数据录入需要管理员密码");
+      adminPassword = await requestAdminPassword("历史数据录入需要管理员密码");
       if (!adminPassword) return;
     }
     try {
@@ -620,7 +692,7 @@ export default function App() {
 
   // ── 更新顾客 ──
   const updateCustomer = async (id, patch) => {
-    const adminPassword = requestAdminPassword("修改顾客数据需要管理员密码");
+    const adminPassword = await requestAdminPassword("修改顾客数据需要管理员密码");
     if (!adminPassword) return false;
     try {
       await api("updateCustomer", { id, patch, adminPassword });
@@ -636,9 +708,14 @@ export default function App() {
   };
 
   const deleteCustomer = async (id) => {
-    const adminPassword = requestAdminPassword("删除顾客记录需要管理员密码");
+    const confirmed = await requestConfirm({
+      title: "删除顾客记录",
+      message: "确认删除这条顾客记录吗？\n删除后不可恢复。",
+      confirmText: "确认删除",
+    });
+    if (!confirmed) return;
+    const adminPassword = await requestAdminPassword("删除顾客记录需要管理员密码");
     if (!adminPassword) return;
-    if (!window.confirm("确认删除这条顾客记录吗？")) return;
     try {
       await api("deleteCustomer", { id, adminPassword });
       const updated = customers.filter(c => c.id !== id);
@@ -678,15 +755,17 @@ export default function App() {
 
   // ── 设置更新 ──
   const updateSettings = async (patch) => {
-    const adminPassword = requestAdminPassword("修改系统设置需要管理员密码");
-    if (!adminPassword) return;
+    const adminPassword = await requestAdminPassword("修改系统设置需要管理员密码");
+    if (!adminPassword) return false;
     const s = { ...settings, ...patch };
     try {
       await api("saveSettings", { settings: s, adminPassword });
       setSettings(s); saveS(s);
       setSyncState("cloud");
+      return true;
     } catch (error) {
       showToast("error", error.message || "设置保存失败，请重试");
+      return false;
     }
   };
 
@@ -862,6 +941,24 @@ export default function App() {
             </div>
           </div>
         </div>
+      )}
+
+      {passwordPrompt && (
+        <PasswordModal
+          reason={passwordPrompt.reason}
+          onCancel={() => resolveAdminPassword(null)}
+          onSubmit={(password) => resolveAdminPassword(password)}
+        />
+      )}
+
+      {confirmPrompt && (
+        <ConfirmModal
+          title={confirmPrompt.title}
+          message={confirmPrompt.message}
+          confirmText={confirmPrompt.confirmText}
+          onCancel={() => resolveConfirm(false)}
+          onConfirm={() => resolveConfirm(true)}
+        />
       )}
 
       <Toast toast={toast} />
@@ -1392,31 +1489,34 @@ function SettingsPanel({ settings, onUpdate, showToast, onExport, onImport }) {
   const [newTeam, setNewTeam] = useState("");
   const [newMember, setNewMember] = useState({});
 
-  const addCard = () => {
+  const addCard = async () => {
     if (!newCard.trim()) return;
     if (settings.cardTypes.includes(newCard.trim())) { showToast("error", "卡种已存在"); return; }
-    onUpdate({ cardTypes: [...settings.cardTypes, newCard.trim()] });
+    const saved = await onUpdate({ cardTypes: [...settings.cardTypes, newCard.trim()] });
+    if (!saved) return;
     setNewCard("");
     showToast("success", "已添加卡种");
   };
 
   const removeCard = (v) => onUpdate({ cardTypes: settings.cardTypes.filter(c => c !== v) });
 
-  const addTeam = () => {
+  const addTeam = async () => {
     if (!newTeam.trim()) return;
     const team = { id: "t" + Date.now(), name: newTeam.trim(), members: [] };
-    onUpdate({ teams: [...settings.teams, team] });
+    const saved = await onUpdate({ teams: [...settings.teams, team] });
+    if (!saved) return;
     setNewTeam("");
     showToast("success", "已添加战队");
   };
 
   const removeTeam = (id) => onUpdate({ teams: settings.teams.filter(t => t.id !== id) });
 
-  const addMember = (teamId) => {
+  const addMember = async (teamId) => {
     const name = (newMember[teamId] || "").trim();
     if (!name) return;
     const teams = settings.teams.map(t => t.id === teamId ? { ...t, members: [...t.members, name] } : t);
-    onUpdate({ teams });
+    const saved = await onUpdate({ teams });
+    if (!saved) return;
     setNewMember(x => ({ ...x, [teamId]: "" }));
     showToast("success", `已添加：${name}`);
   };
