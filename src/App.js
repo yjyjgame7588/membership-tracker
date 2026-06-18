@@ -31,7 +31,13 @@ const STATUS = {
   pending: { label: "待联系", color: C.purple, bg: C.purpleLight, icon: "⏳" },
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => {
+  const date = new Date();
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
 const fmtDate = (d) => { if (!d) return ""; const [, m, day] = d.split("-"); return `${m}/${day}`; };
 const API_URL = "https://youyou-d3g8xhv9je8669b75.service.tcloudbase.com/jb-api";
 
@@ -476,6 +482,11 @@ export default function App() {
     setToast({ type, text });
     setTimeout(() => setToast(null), 2800);
   };
+  const requestAdminPassword = (reason = "该操作需要管理员密码") => {
+    const password = window.prompt(`${reason}\n请输入管理员密码：`);
+    if (password === null) return null;
+    return password;
+  };
 
   const exportData = () => {
     const backup = {
@@ -510,12 +521,14 @@ export default function App() {
       if (!incomingCustomers || !incomingSettings) throw new Error("文件格式不正确");
       const okReplace = window.confirm(`确认导入这份本地备份吗？\n\n将替换当前云端数据：${incomingCustomers.length} 位顾客记录。`);
       if (!okReplace) return;
+      const adminPassword = requestAdminPassword("导入会覆盖云端数据");
+      if (!adminPassword) return;
 
+      await api("replaceAll", { customers: incomingCustomers, settings: incomingSettings, adminPassword });
       setCustomers(incomingCustomers);
       setSettings(incomingSettings);
       saveC(incomingCustomers);
       saveS(incomingSettings);
-      await api("replaceAll", { customers: incomingCustomers, settings: incomingSettings });
       setSyncState("cloud");
       showToast("success", "已导入并同步到云端");
     } catch (error) {
@@ -565,62 +578,76 @@ export default function App() {
     }
 
     const newC = normalizeCustomer({ id: Date.now(), ...form, name: cleanName, phone: cleanPhone });
-    const updated = [newC, ...customers];
-    setCustomers(updated); saveC(updated);
-    setAddOpen(false);
-    setTab("stats");
+    let adminPassword = "";
+    if (newC.date !== today()) {
+      adminPassword = requestAdminPassword("历史数据录入需要管理员密码");
+      if (!adminPassword) return;
+    }
+
     try {
-      await api("addCustomer", { customer: newC });
+      await api("addCustomer", { customer: newC, adminPassword });
+      const updated = [newC, ...customers];
+      setCustomers(updated); saveC(updated);
+      setAddOpen(false);
+      setTab("stats");
       showToast("success", `已云端添加：${newC.name}`);
       setSyncState("cloud");
     } catch (error) {
-      showToast("error", "已临时保存，本次云端同步失败");
-      setSyncState("offline");
+      showToast("error", error.message || "保存失败，请重试");
     }
   };
 
   const confirmDup = async () => {
     if (!pendingForm) return;
     const newC = normalizeCustomer({ id: Date.now(), ...pendingForm, name: pendingForm.name.trim(), phone: pendingForm.phone.trim() });
-    const updated = [newC, ...customers];
-    setCustomers(updated); saveC(updated);
-    setDupModal(null); setPendingForm(null);
-    setAddOpen(false); setTab("stats");
+    let adminPassword = pendingForm.adminPassword || "";
+    if (newC.date !== today() && !adminPassword) {
+      adminPassword = requestAdminPassword("历史数据录入需要管理员密码");
+      if (!adminPassword) return;
+    }
     try {
-      await api("addCustomer", { customer: newC });
+      await api("addCustomer", { customer: newC, adminPassword });
+      const updated = [newC, ...customers];
+      setCustomers(updated); saveC(updated);
+      setDupModal(null); setPendingForm(null);
+      setAddOpen(false); setTab("stats");
       showToast("success", `已云端添加：${newC.name}`);
       setSyncState("cloud");
     } catch (error) {
-      showToast("error", "已临时保存，本次云端同步失败");
-      setSyncState("offline");
+      showToast("error", error.message || "保存失败，请重试");
     }
   };
 
   // ── 更新顾客 ──
   const updateCustomer = async (id, patch) => {
-    const updated = customers.map(c => c.id === id ? { ...c, ...patch } : c);
-    setCustomers(updated); saveC(updated);
+    const adminPassword = requestAdminPassword("修改顾客数据需要管理员密码");
+    if (!adminPassword) return false;
     try {
-      await api("updateCustomer", { id, patch });
+      await api("updateCustomer", { id, patch, adminPassword });
+      const updated = customers.map(c => c.id === id ? { ...c, ...patch } : c);
+      setCustomers(updated); saveC(updated);
       showToast("success", "已同步更新");
       setSyncState("cloud");
+      return true;
     } catch (error) {
-      showToast("error", "已临时保存，本次云端同步失败");
-      setSyncState("offline");
+      showToast("error", error.message || "保存失败，请重试");
+      return false;
     }
   };
 
   const deleteCustomer = async (id) => {
-    const updated = customers.filter(c => c.id !== id);
-    setCustomers(updated); saveC(updated);
-    setDetailId(null);
+    const adminPassword = requestAdminPassword("删除顾客记录需要管理员密码");
+    if (!adminPassword) return;
+    if (!window.confirm("确认删除这条顾客记录吗？")) return;
     try {
-      await api("deleteCustomer", { id });
+      await api("deleteCustomer", { id, adminPassword });
+      const updated = customers.filter(c => c.id !== id);
+      setCustomers(updated); saveC(updated);
+      setDetailId(null);
       showToast("success", "已云端删除");
       setSyncState("cloud");
     } catch (error) {
-      showToast("error", "本机已删除，云端同步失败");
-      setSyncState("offline");
+      showToast("error", error.message || "删除失败，请重试");
     }
   };
 
@@ -651,14 +678,15 @@ export default function App() {
 
   // ── 设置更新 ──
   const updateSettings = async (patch) => {
+    const adminPassword = requestAdminPassword("修改系统设置需要管理员密码");
+    if (!adminPassword) return;
     const s = { ...settings, ...patch };
-    setSettings(s); saveS(s);
     try {
-      await api("saveSettings", { settings: s });
+      await api("saveSettings", { settings: s, adminPassword });
+      setSettings(s); saveS(s);
       setSyncState("cloud");
     } catch (error) {
-      showToast("error", "设置已临时保存，云端同步失败");
-      setSyncState("offline");
+      showToast("error", error.message || "设置保存失败，请重试");
     }
   };
 
@@ -895,7 +923,7 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
 
       <Input label="顾客姓名 *" value={f.name} onChange={e => set("name", e.target.value)} placeholder="请输入顾客姓名" />
       <Input label="手机号 *" value={f.phone} onChange={e => set("phone", e.target.value)} placeholder="请输入11位手机号" type="tel" />
-      <Input label="日期" value={f.date} onChange={e => set("date", e.target.value)} type="date" />
+      <Input label="日期（可录入历史数据，非今日需密码）" value={f.date} onChange={e => set("date", e.target.value)} type="date" />
 
       <div style={{ marginBottom: 14 }}>
         <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>推荐员工</label>
@@ -988,8 +1016,31 @@ function AddForm({ form, setForm, allStaff, settings, onStaffChange, onSubmit, o
 
 // ─── 顾客详情弹窗 ─────────────────────────────────────────────────
 function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, settings }) {
-  const [edit, setEdit] = useState({ status: c.status, failReason: c.failReason, followNote: c.followNote, followStaff: c.followStaff, contributors: getContributors(c) });
+  const [edit, setEdit] = useState({
+    name: c.name,
+    phone: c.phone,
+    staff: c.staff,
+    teamId: c.teamId,
+    date: c.date,
+    card: c.card,
+    status: c.status,
+    failReason: c.failReason,
+    followNote: c.followNote,
+    followStaff: c.followStaff,
+    contributors: getContributors(c),
+  });
+  const [error, setError] = useState("");
   const set = (k, v) => setEdit(x => ({ ...x, [k]: v }));
+  const setStaff = (name) => {
+    const staff = allStaff.find(s => s.name === name);
+    setEdit(x => ({
+      ...x,
+      staff: name,
+      teamId: staff ? staff.teamId : x.teamId,
+      followStaff: x.followStaff || name,
+      contributors: uniqueNames([name, ...(x.contributors || [])]),
+    }));
+  };
   const selectStatus = (status) => setEdit(x => ({
     ...x,
     status,
@@ -1000,10 +1051,13 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
     const next = current.includes(name) ? current.filter(v => v !== name) : uniqueNames([...current, name]);
     return { ...x, contributors: next };
   });
-  const save = () => {
-    if (edit.status === "success" && uniqueNames(edit.contributors).length === 0) return;
-    onUpdate({ ...edit, contributors: uniqueNames(edit.contributors) });
-    onClose();
+  const save = async () => {
+    if (!edit.name.trim()) { setError("请填写顾客姓名"); return; }
+    if (!/^1\d{10}$/.test(edit.phone.trim())) { setError("手机号格式不正确"); return; }
+    if (edit.status === "success" && uniqueNames(edit.contributors).length === 0) { setError("请选择成交人"); return; }
+    setError("");
+    const saved = await onUpdate(normalizeCustomer({ ...c, ...edit, name: edit.name.trim(), phone: edit.phone.trim(), contributors: uniqueNames(edit.contributors) }));
+    if (saved !== false) onClose();
   };
 
   return (
@@ -1014,10 +1068,35 @@ function DetailModal({ c, allStaff, teamName, onUpdate, onDelete, onClose, setti
           <div onClick={onClose} style={{ fontSize: 22, color: C.textSub, cursor: "pointer", lineHeight: 1 }}>×</div>
         </div>
 
-        <div style={{ background: C.grayLight, borderRadius: 12, padding: 14, marginBottom: 18, fontSize: 14, lineHeight: 2 }}>
-          <div>📱 {c.phone}</div>
-          <div>👤 {c.staff} · 🚩 {teamName}</div>
-          <div>🎫 {c.card} · 📅 {c.date}</div>
+        <div style={{ background: C.grayLight, borderRadius: 12, padding: 14, marginBottom: 18, fontSize: 14, lineHeight: 1.8 }}>
+          <div>原记录：{c.phone} · {c.staff} · {teamName} · {c.date}</div>
+        </div>
+        {error && <div style={{ background: C.accentLight, color: C.accent, borderRadius: 12, padding: "9px 12px", fontSize: 13, fontWeight: 700, marginBottom: 14 }}>{error}</div>}
+
+        <Input label="顾客姓名" value={edit.name} onChange={e => set("name", e.target.value)} />
+        <Input label="手机号" value={edit.phone} onChange={e => set("phone", e.target.value)} type="tel" />
+        <Input label="日期（可修改为历史日期，需密码）" value={edit.date} onChange={e => set("date", e.target.value)} type="date" />
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>推荐员工</label>
+          <select value={edit.staff} onChange={e => setStaff(e.target.value)}
+            style={{ width: "100%", padding: "11px 14px", borderRadius: 15, border: `1.5px solid ${C.border}`, fontSize: 15, background: "#fff", outline: "none" }}>
+            {allStaff.map(s => <option key={s.name + s.teamId} value={s.name}>{s.name}（{s.teamName}）</option>)}
+          </select>
+        </div>
+
+        <div style={{ marginBottom: 14 }}>
+          <label style={{ fontSize: 13, color: C.textSub, display: "block", marginBottom: 5, fontWeight: 500 }}>会员卡类型</label>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            {settings.cardTypes.map(v => (
+              <div key={v} onClick={() => set("card", v)} style={{
+                padding: "8px 12px", borderRadius: 14, cursor: "pointer", fontSize: 13, fontWeight: 700,
+                background: edit.card === v ? C.primary : C.primaryLight,
+                color: edit.card === v ? "#fff" : C.primary,
+                border: `1.5px solid ${edit.card === v ? C.primary : C.border}`,
+              }}>{v}</div>
+            ))}
+          </div>
         </div>
 
         <div style={{ marginBottom: 14 }}>

@@ -8,6 +8,7 @@ const db = app.database();
 const CUSTOMERS = "jb_customers";
 const SETTINGS = "jb_settings";
 const SETTINGS_ID = "main";
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || "532313";
 
 const DEFAULT_SETTINGS = {
   cardTypes: ["京贝体验会员卡", "京贝年度会员卡"],
@@ -18,7 +19,7 @@ const DEFAULT_SETTINGS = {
   ],
 };
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => new Date(Date.now() + 8 * 60 * 60 * 1000).toISOString().slice(0, 10);
 
 const sampleCustomers = () => [
   { id: 1, name: "张小宝", phone: "13800001111", staff: "王小明", teamId: "t1", date: today(), card: "京贝体验会员卡", status: "success", failReason: "", followNote: "", followStaff: "王小明" },
@@ -29,6 +30,7 @@ const sampleCustomers = () => [
 
 const ok = (data = {}) => ({ ok: true, ...data });
 const fail = (message, statusCode = 400) => ({ ok: false, statusCode, message });
+const isAdmin = (body) => body && body.adminPassword === ADMIN_PASSWORD;
 
 const readBody = (event) => {
   if (!event) return {};
@@ -94,7 +96,8 @@ async function loadData() {
   return ok({ customers, settings });
 }
 
-async function addCustomer(customer) {
+async function addCustomer(customer, body) {
+  if (customer?.date !== today() && !isAdmin(body)) return fail("历史数据录入需要管理员密码", 401);
   const now = Date.now();
   const id = customer.id || now;
   await db.collection(CUSTOMERS).add({
@@ -106,7 +109,8 @@ async function addCustomer(customer) {
   return ok({ id });
 }
 
-async function updateCustomer(id, patch) {
+async function updateCustomer(id, patch, body) {
+  if (!isAdmin(body)) return fail("修改顾客数据需要管理员密码", 401);
   const found = await db.collection(CUSTOMERS).where({ id }).limit(1).get();
   if (!found.data || found.data.length === 0) return fail("未找到顾客记录", 404);
 
@@ -117,7 +121,8 @@ async function updateCustomer(id, patch) {
   return ok();
 }
 
-async function deleteCustomer(id) {
+async function deleteCustomer(id, body) {
+  if (!isAdmin(body)) return fail("删除顾客记录需要管理员密码", 401);
   const found = await db.collection(CUSTOMERS).where({ id }).limit(1).get();
   if (!found.data || found.data.length === 0) return ok();
 
@@ -125,7 +130,8 @@ async function deleteCustomer(id) {
   return ok();
 }
 
-async function saveSettings(settings) {
+async function saveSettings(settings, body) {
+  if (!isAdmin(body)) return fail("修改系统设置需要管理员密码", 401);
   await db.collection(SETTINGS).doc(SETTINGS_ID).set({
     ...settings,
     updatedAt: Date.now(),
@@ -142,7 +148,8 @@ async function clearCustomers() {
   }
 }
 
-async function replaceAll(customers, settings) {
+async function replaceAll(customers, settings, body) {
+  if (!isAdmin(body)) return fail("导入数据需要管理员密码", 401);
   if (!Array.isArray(customers) || !settings || !Array.isArray(settings.teams) || !Array.isArray(settings.cardTypes)) {
     return fail("导入文件格式不正确");
   }
@@ -169,11 +176,11 @@ async function handleAction(body) {
   let result;
 
   if (action === "load") result = await loadData();
-  else if (action === "addCustomer") result = await addCustomer(body.customer);
-  else if (action === "updateCustomer") result = await updateCustomer(body.id, body.patch);
-  else if (action === "deleteCustomer") result = await deleteCustomer(body.id);
-  else if (action === "saveSettings") result = await saveSettings(body.settings);
-  else if (action === "replaceAll") result = await replaceAll(body.customers, body.settings);
+  else if (action === "addCustomer") result = await addCustomer(body.customer, body);
+  else if (action === "updateCustomer") result = await updateCustomer(body.id, body.patch, body);
+  else if (action === "deleteCustomer") result = await deleteCustomer(body.id, body);
+  else if (action === "saveSettings") result = await saveSettings(body.settings, body);
+  else if (action === "replaceAll") result = await replaceAll(body.customers, body.settings, body);
   else result = fail("未知操作");
 
   return result;
